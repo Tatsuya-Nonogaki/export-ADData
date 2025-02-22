@@ -297,7 +297,13 @@ process {
                 if ($IncludeSystemObject) {
                     return $true 
                 } else {
-                    return ($_.isCriticalSystemObject -ne "TRUE") -and ($_.sAMAccountName -notmatch '\$$')
+                    if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -match '\$$') {
+                        Write-Host "Excluded System User: $($_.sAMAccountName)"
+                        Write-Log "Excluded System User: sAMAccountName=$($_.sAMAccountName)"
+                        return $false
+                    } else {
+                        return $true
+                    }
                 }
               } | 
                 ForEach-Object {
@@ -440,7 +446,13 @@ process {
                 if ($IncludeSystemObject) {
                     return $true 
                 } else {
-                    return ($_.isCriticalSystemObject -ne "TRUE") -and ($_.sAMAccountName -notin $excludedGroups)
+                    if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -in $excludedGroups) {
+                        Write-Host "Excluded System Group: $($_.sAMAccountName)"
+                        Write-Log "Excluded System Group: sAMAccountName=$($_.sAMAccountName)"
+                        return $false
+                    } else {
+                        return $true
+                    }
                 }
               } | 
                 ForEach-Object {
