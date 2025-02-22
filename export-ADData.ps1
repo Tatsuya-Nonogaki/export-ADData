@@ -1,18 +1,18 @@
 <#
- .SYNOPSIS
+.SYNOPSIS
   Exports group and users from Active Directory.
 
- .DESCRIPTION
+.DESCRIPTION
   Exports group and users from Active Directory to CSV files.
   Version: 0.7.10
 
- .PARAMETER DNPrefix
+.PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
   Domain component from which you want to retrieve
   objects. For example: "unit.mydomain.local" which is converted to 
   DistinguishedName(DNPath) "OU=unit,DC=mydomain,DC=local" in the script.
 
- .PARAMETER DCDepth
+.PARAMETER DCDepth
   Optional. Mutually exclusive with DNPath. 
   In calculation of the DNPath, we assume the last 2 elements are DC 
   per default. If it is not what you expect, specify depth count of 
@@ -21,15 +21,21 @@
    DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
   -DCDepth 4: DNPath becomes DC=dept,DC=unit,DC=mydomain,DC=local
 
- .PARAMETER DNPath
+.PARAMETER DNPath
   (Alias -p) Optional. Mutually exclusive with DNPrefix and DCDepth. 
   Instead of specifying DNPrefix (optionally with DCDepth), you can 
   explicitly specify it in DistinguishedName format. This is preferable 
   for accuracy, if you are familiar with DN expression of AD components. 
 
- .PARAMETER OutPath
+.PARAMETER OutPath
   (Alias -o) Optional. Folder path where you want to save output CSV files.
-  Path selection diablog will ask you if omitted.
+  Path selection dialog will ask you if omitted.
+  
+.PARAMETER IncludeSystemObject
+  Optional. If set, includes system objects in the export. Default is $false.
+
+.PARAMETER CreateOUIfNotExists
+  Optional. If set, creates missing OUs during DN conversion. Default is $false.
 #>
 [CmdletBinding()]
 param(
@@ -46,7 +52,13 @@ param(
 
     [Parameter()]
     [Alias("o")]
-    [string]$OutPath
+    [string]$OutPath,
+
+    [Parameter()]
+    [bool]$IncludeSystemObject = $false,
+
+    [Parameter()]
+    [bool]$CreateOUIfNotExists = $false
 )
 
 begin {
@@ -158,9 +170,21 @@ process {
         return $exists
     }
 
-    #
-    ## Main
-    #
+    # Create missing OUs
+    function Create-MissingOU {
+        param ([string]$DNPath)
+
+        $parts = $DNPath -split ","
+        $currentPath = ""
+        foreach ($part in [array]::Reverse($parts)) {
+            $currentPath = "$part,$currentPath".TrimEnd(',')
+            if (-not (Check-DNPathExistence -DNPath $currentPath)) {
+                if ($part -match "^OU=") {
+                    New-ADOrganizationalUnit -Name ($part -replace "^OU=") -Path ($currentPath -replace "^$part,")
+                }
+            }
+        }
+    }
 
     # Determine DNPath based on argument combination
     if ($PSBoundParameters.ContainsKey('DNPrefix')) {
@@ -177,8 +201,12 @@ process {
     }
 
     if (-not (Check-DNPathExistence -DNPath $DNPath)) {
-        Write-Error "Invalid or non-existent DNPath: $DNPath"
-        exit 1
+        if ($CreateOUIfNotExists) {
+            Create-MissingOU -DNPath $DNPath
+        } else {
+            Write-Error "Invalid or non-existent DNPath: $DNPath"
+            exit 1
+        }
     }
 
     write-host "DN Path = $DNPath"
@@ -205,8 +233,13 @@ process {
     # Additional user properties we want to include in output
     $userExtraProps = "MemberOf", "EmailAddress", "HomePhone", "MobilePhone", "OfficePhone", "Title", "Department", "Manager", "LockedOut", "*"
 
+    # Filter system objects if $IncludeSystemObject is $false
+    $userFilter = if ($IncludeSystemObject) { '*' } else { '(!objectClass=computer) -and (!isCriticalSystemObject=$true)' }
+    $groupFilter = if ($IncludeSystemObject) { '*' } else { '(!objectClass=computer) -and (!isCriticalSystemObject=$true)' }
+
     # Store Manager property value as a DistinguishedName so that it can be easily given to import script
-    Get-ADUser -Filter * -Properties $userExtraProps -SearchBase "$DNPath" | 
+    Get-ADUser -Filter $userFilter -Properties $userExtraProps -SearchBase "$DNPath" | 
+      Where-Object { $IncludeSystemObject -or -not $_.isCriticalSystemObject } |
       Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, `
                     @{Name="Manager"; Expression={ if ($_.Manager) { (Get-ADUser -Identity $_.Manager).DistinguishedName } else { $null } }}, `
                     * -ExcludeProperty MemberOf, Manager | 
@@ -215,7 +248,8 @@ process {
     # Additional group properties we want to include in output
     $groupExtraProps = "MemberOf", "ManagedBy", "*"
 
-    Get-ADGroup -Filter * -Properties $groupExtraProps -SearchBase "$DNPath" | 
+    Get-ADGroup -Filter $groupFilter -Properties $groupExtraProps -SearchBase "$DNPath" | 
+     Where-Object { $IncludeSystemObject -or -not $_.isCriticalSystemObject } |
      Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf |
       Export-Csv -Path $groupOutputFilePath -Encoding UTF8 -NoTypeInformation
 
