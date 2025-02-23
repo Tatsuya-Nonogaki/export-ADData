@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.4a
+  Version: 0.7.4b
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -335,7 +335,13 @@ process {
                         }
 
                         $excludedProperties = @("objectClass", "sAMAccountName", "Password", "Enabled", "userAccountControl", 
-                               "LockedOut", "PasswordNeverExpires", "CannotChangePassword", "PasswordNotRequired")
+                               "LockedOut", "PasswordNeverExpires", "CannotChangePassword", "PasswordNotRequired", 
+                               "ServicePrincipalNames", "SmartcardLogonRequired", "KerberosEncryptionType", "CompoundIdentitySupported", 
+                               "Certificates", "AllowReversiblePasswordEncryption", "AccountNotDelegated", "AccountExpirationDate", 
+                               "TrustedForDelegation", "AccountExpirationDate", "TrustedForDelegation", "instanceType", "AddedProperties", 
+                               "CanonicalName", "HomedirRequired", "DoesNotRequirePreAuth", "ModifiedProperties", "LastKnownParent", 
+                               "sDRightsEffective", "countryCode", "msDS-User-Account-Control-Computed", "PropertyCount", "uSNChanged", 
+                               "SIDHistory", "codePage", "dSCorePropagationData")
 
                         Try {
                             New-ADUser @newUserParams -ErrorAction Stop
@@ -351,7 +357,19 @@ process {
                             $setUserProps = @{}
                             foreach ($key in $objectProps.PSObject.Properties.Name) {
                                 if ($null -ne $objectProps.$key -and $key -notin $excludedProperties) {
-                                    $setUserProps[$key] = $objectProps.$key
+                                    try {
+                                        # Convert Boolean and DateTime values
+                                        if ($key -match '^(CompoundIdentitySupported|TrustedForDelegation|AllowReversiblePasswordEncryption|AccountNotDelegated|DoesNotRequirePreAuth|SmartcardLogonRequired)$') {
+                                            $setUserProps[$key] = [System.Nullable[System.Boolean]]::Parse($objectProps.$key)
+                                        } elseif ($key -eq 'AccountExpirationDate') {
+                                            $setUserProps[$key] = [System.Nullable[System.DateTime]]::Parse($objectProps.$key)
+                                        } else {
+                                            $setUserProps[$key] = $objectProps.$key
+                                        }
+                                    } catch {
+                                        Write-Error "Failed to convert property $key for user $sAMAccountName: $_"
+                                        Write-Log "Failed to convert property $key for user $sAMAccountName: $_"
+                                    }
                                 }
                             }
                             if ($setUserProps.Count -gt 0) {
