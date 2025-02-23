@@ -342,7 +342,13 @@ process {
                                "TrustedForDelegation", "AccountExpirationDate", "TrustedForDelegation", "instanceType", "AddedProperties", 
                                "CanonicalName", "HomedirRequired", "DoesNotRequirePreAuth", "ModifiedProperties", "LastKnownParent", 
                                "sDRightsEffective", "countryCode", "msDS-User-Account-Control-Computed", "PropertyCount", "uSNChanged", 
-                               "SIDHistory", "codePage", "dSCorePropagationData", "DistinguishedName")
+                               "SIDHistory", "codePage", "dSCorePropagationData", 
+                               "DistinguishedName", "isDeleted", "primaryGroupID", "userCertificate", "Deleted", "SID", "PropertyNames",
+                               "MNSLogonAccount", "nTSecurityDescriptor", "BadLogonCount", "UseDESKeyOnly", "isCriticalSystemObject", 
+                               "TrustedToAuthForDelegation", "uSNCreated", "Created", "ObjectGUID", "LastLogonDate", "createTimeStamp", 
+                               "sAMAccountType", "whenChanged", "accountExpires", "PasswordExpired", "CN", "LastBadPasswordAttempt", 
+                               "PrimaryGroup", "PasswordLastSet", "RemovedProperties", "whenCreated", "MemberOf", "AccountLockoutTime", 
+                               "ObjectCategory", "ProtectedFromAccidentalDeletion", "Modified", "objectSid", "pwdLastSet", "Name")
 
                         Try {
                             New-ADUser @newUserParams -ErrorAction Stop
