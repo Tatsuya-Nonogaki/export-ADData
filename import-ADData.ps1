@@ -410,7 +410,8 @@ process {
                                 }
                             } catch {
                                 Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set userAccountControl flags for user ${s                            }
+                                Write-Log "Failed to set userAccountControl flags for user $($_.sAMAccountName): $_"
+                            }
 
                             # Set password if the CSV provides Password
                             if ($_.PSObject.Properties.Name -contains "Password" -and $_.Password -ne "") {
