@@ -367,8 +367,8 @@ process {
                                             $setUserProps[$key] = $objectProps.$key
                                         }
                                     } catch {
-                                        Write-Error "Failed to convert property $key for user $sAMAccountName: $_"
-                                        Write-Log "Failed to convert property $key for user $sAMAccountName: $_"
+                                        Write-Error "Failed to convert property $key for user ${sAMAccountName}: $_"
+                                        Write-Log "Failed to convert property $key for user ${sAMAccountName}: $_"
                                     }
                                 }
                             }
@@ -408,8 +408,8 @@ process {
                                     Write-Log "Account enabled: sAMAccountName=$sAMAccountName"
                                 }
                             } catch {
-                                Write-Error "Failed to set userAccountControl flags for user $sAMAccountName: $_"
-                                Write-Log "Failed to set userAccountControl flags for user $sAMAccountName: $_"
+                                Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
+                                Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
                             }
 
                             # Set password if the CSV provides Password
@@ -420,7 +420,7 @@ process {
                                     Write-Host "  => Password set for user: $sAMAccountName"
                                     Write-Log "Password set for user: sAMAccountName=$sAMAccountName"
                                 } catch {
-                                    Write-Error "Failed to set password for user $sAMAccountName: $_"
+                                    Write-Error "Failed to set password for user ${sAMAccountName}: $_"
                                     Write-Log "Failed to set password for user: sAMAccountName=$sAMAccountName - $_"
                                 }
                             } else {
@@ -444,7 +444,7 @@ process {
                             }
                             Write-Host "Imported user: $sAMAccountName"
                         } Catch {
-                            Write-Error "Failed to import user $sAMAccountName: $_"
+                            Write-Error "Failed to import user ${sAMAccountName}: $_"
                             Write-Log "Failed to create user: sAMAccountName=$sAMAccountName - $_"
                         }
                     } else {
@@ -540,7 +540,7 @@ process {
                             }
                             Write-Host "Imported group: $sAMAccountName"
                         } Catch {
-                            Write-Error "Failed to import group $sAMAccountName: $_"
+                            Write-Error "Failed to import group ${sAMAccountName}: $_"
                             Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
                         }
                     } else {
