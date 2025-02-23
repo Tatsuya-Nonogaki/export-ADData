@@ -334,6 +334,7 @@ process {
                             # Define EmailAddress or other properties here if needed
                         }
 
+                        # Excluded properties that are not applicable or cause errors
                         $excludedProperties = @("objectClass", "sAMAccountName", "Password", "Enabled", "userAccountControl", 
                                "LockedOut", "PasswordNeverExpires", "CannotChangePassword", "PasswordNotRequired", 
                                "ServicePrincipalNames", "SmartcardLogonRequired", "KerberosEncryptionType", "CompoundIdentitySupported", 
@@ -341,7 +342,7 @@ process {
                                "TrustedForDelegation", "AccountExpirationDate", "TrustedForDelegation", "instanceType", "AddedProperties", 
                                "CanonicalName", "HomedirRequired", "DoesNotRequirePreAuth", "ModifiedProperties", "LastKnownParent", 
                                "sDRightsEffective", "countryCode", "msDS-User-Account-Control-Computed", "PropertyCount", "uSNChanged", 
-                               "SIDHistory", "codePage", "dSCorePropagationData")
+                               "SIDHistory", "codePage", "dSCorePropagationData", "DistinguishedName")
 
                         Try {
                             New-ADUser @newUserParams -ErrorAction Stop
@@ -376,41 +377,40 @@ process {
                                 Set-ADUser -Identity $sAMAccountName @setUserProps -ErrorAction Stop
                             }
 
-                            # Set "userAccountControl" propertiy related special control bits
+                            # Set "userAccountControl" property related special control bits
                             try {
                                 $userFlags = [int]$_.userAccountControl
 
                                 if ($userFlags -band 0x80000) {                  # MustChangePassword
                                     Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
-                                    Write-Host "  => MustChangePassword applied: $sAMAccountName"
-                                    Write-Log "MustChangePassword applied: sAMAccountName=$sAMAccountName"
+                                    Write-Host "  => MustChangePassword applied: ${sAMAccountName}"
+                                    Write-Log "MustChangePassword applied: sAMAccountName=${sAMAccountName}"
                                 }
                                 if ($userFlags -band 0x40) {                     # CannotChangePassword
                                     $user = Get-ADUser -Identity $sAMAccountName
                                     Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq "Self" } } | ForEach-Object { $_.AccessControlType = "Deny"; $_ })
-                                    Write-Host "  => CannotChangePassword applied: $sAMAccountName"
-                                    Write-Log "CannotChangePassword applied: sAMAccountName=$sAMAccountName"
+                                    Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
+                                    Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
                                 }
                                 if ($userFlags -band 0x10000) {                  # PasswordNeverExpires
                                     Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                                    Write-Host "  => PasswordNeverExpires applied: $sAMAccountName"
-                                    Write-Log "PasswordNeverExpires applied: sAMAccountName=$sAMAccountName"
+                                    Write-Host "  => PasswordNeverExpires applied: ${sAMAccountName}"
+                                    Write-Log "PasswordNeverExpires applied: sAMAccountName=${sAMAccountName}"
                                 }
 
                                 # Enable or disable the account
                                 if ($userFlags -band 2) {
                                     Disable-ADAccount -Identity $sAMAccountName
-                                    Write-Host "  => Account disabled: $sAMAccountName"
-                                    Write-Log "Account disabled: sAMAccountName=$sAMAccountName"
+                                    Write-Host "  => Account disabled: ${sAMAccountName}"
+                                    Write-Log "Account disabled: sAMAccountName=${sAMAccountName}"
                                 } else {
                                     Enable-ADAccount -Identity $sAMAccountName
-                                    Write-Host "  => Account enabled: $sAMAccountName"
-                                    Write-Log "Account enabled: sAMAccountName=$sAMAccountName"
+                                    Write-Host "  => Account enabled: ${sAMAccountName}"
+                                    Write-Log "Account enabled: sAMAccountName=${sAMAccountName}"
                                 }
                             } catch {
                                 Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                            }
+                                Write-Log "Failed to set userAccountControl flags for user ${s                            }
 
                             # Set password if the CSV provides Password
                             if ($_.PSObject.Properties.Name -contains "Password" -and $_.Password -ne "") {
