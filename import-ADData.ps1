@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.4g
+  Version: 0.7.4h
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -348,42 +348,6 @@ process {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
                         }
 
-                        # Set "userAccountControl" property related special control bits
-                        try {
-                            $userFlags = [int]$_.userAccountControl
-
-                            if ($userFlags -band 0x80000) {                  # MustChangePassword
-                                Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
-                                Write-Host "  => MustChangePassword applied: ${sAMAccountName}"
-                                Write-Log "MustChangePassword applied: sAMAccountName=${sAMAccountName}"
-                            }
-                            if ($userFlags -band 0x40) {                     # CannotChangePassword
-                                $user = Get-ADUser -Identity $sAMAccountName
-                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq "Self" } } | ForEach-Object { $_.AccessControlType = "Deny"; $_ })
-                                Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
-                                Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
-                            }
-                            if ($userFlags -band 0x10000) {                  # PasswordNeverExpires
-                                Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                                Write-Host "  => PasswordNeverExpires applied: ${sAMAccountName}"
-                                Write-Log "PasswordNeverExpires applied: sAMAccountName=${sAMAccountName}"
-                            }
-
-                            # Enable or disable the account
-                            if ($userFlags -band 2) {
-                                Disable-ADAccount -Identity $sAMAccountName
-                                Write-Host "  => Account disabled: ${sAMAccountName}"
-                                Write-Log "Account disabled: sAMAccountName=${sAMAccountName}"
-                            } else {
-                                Enable-ADAccount -Identity $sAMAccountName
-                                Write-Host "  => Account enabled: ${sAMAccountName}"
-                                Write-Log "Account enabled: sAMAccountName=${sAMAccountName}"
-                            }
-                        } catch {
-                            Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                        }
-
                         # Set password if the CSV provides Password
                         if ($_.PSObject.Properties.Name -contains "Password" -and $_.Password -ne "") {
                             try {
@@ -395,8 +359,47 @@ process {
                                 Write-Error "Failed to set password for user ${sAMAccountName}: $_"
                                 Write-Log "Failed to set password for user: sAMAccountName=$sAMAccountName - $_"
                             }
-                        } else {
-                            Write-Host "  => No password provided for user: $sAMAccountName, skipping password setup"
+                        }
+
+                        # Set "userAccountControl" property related special control bits
+                        try {
+                            $userFlags = [int]$_.userAccountControl
+
+                            if ($userFlags -band 0x80000) {                  # MustChangePassword
+                                Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
+                                Write-Host "  => MustChangePassword applied: ${sAMAccountName}"
+                                Write-Log "MustChangePassword applied: sAMAccountName=${sAMAccountName}"
+                            }
+                            if ($userFlags -band 0x40) {                     # CannotChangePassword
+                                $user = Get-ADUser -Identity $sAMAccountName
+                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq 'bf967a8b-0de6-11d0-a285-00aa003049e2' } })
+                                Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
+                                Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
+                            }
+                            if ($userFlags -band 0x10000) {                  # PasswordNeverExpires
+                                Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
+                                Write-Host "  => PasswordNeverExpires applied: ${sAMAccountName}"
+                                Write-Log "PasswordNeverExpires applied: sAMAccountName=${sAMAccountName}"
+                            }
+
+                            # Enable or disable the account only if the password is set
+                            if ($userFlags -band 2) {
+                                Disable-ADAccount -Identity $sAMAccountName
+                                Write-Host "  => Account disabled: ${sAMAccountName}"
+                                Write-Log "Account disabled: sAMAccountName=${sAMAccountName}"
+                            } else {
+                                if ($_.PSObject.Properties.Name -contains "Password" -and $_.Password -ne "") {
+                                    Enable-ADAccount -Identity $sAMAccountName
+                                    Write-Host "  => Account enabled: ${sAMAccountName}"
+                                    Write-Log "Account enabled: sAMAccountName=${sAMAccountName}"
+                                } else {
+                                    Write-Error "Cannot enable account for user ${sAMAccountName} as no password is set."
+                                    Write-Log "Cannot enable account for user ${sAMAccountName} as no password is set."
+                                }
+                            }
+                        } catch {
+                            Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
+                            Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
                         }
 
                         # Add this user to groups
