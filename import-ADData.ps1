@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.4d
+  Version: 0.7.4f
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -339,7 +339,7 @@ process {
                                "LockedOut", "PasswordNeverExpires", "CannotChangePassword", "PasswordNotRequired", 
                                "ServicePrincipalNames", "SmartcardLogonRequired", "KerberosEncryptionType", "CompoundIdentitySupported", 
                                "Certificates", "AllowReversiblePasswordEncryption", "AccountNotDelegated", "AccountExpirationDate", 
-                               "TrustedForDelegation", "AccountExpirationDate", "TrustedForDelegation", "instanceType", "AddedProperties", 
+                               "TrustedForDelegation", "instanceType", "AddedProperties", 
                                "CanonicalName", "HomedirRequired", "DoesNotRequirePreAuth", "ModifiedProperties", "LastKnownParent", 
                                "sDRightsEffective", "countryCode", "msDS-User-Account-Control-Computed", "PropertyCount", "uSNChanged", 
                                "SIDHistory", "codePage", "dSCorePropagationData", "Manager", "MemberOf", 
