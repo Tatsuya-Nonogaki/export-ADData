@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.4f
+  Version: 0.7.4g
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -334,24 +334,6 @@ process {
                             # Define EmailAddress or other properties here if needed
                         }
 
-                        # Excluded properties that are not applicable or cause errors
-                        $excludedProperties = @("objectClass", "sAMAccountName", "Password", "Enabled", "userAccountControl", 
-                               "LockedOut", "PasswordNeverExpires", "CannotChangePassword", "PasswordNotRequired", 
-                               "ServicePrincipalNames", "SmartcardLogonRequired", "KerberosEncryptionType", "CompoundIdentitySupported", 
-                               "Certificates", "AllowReversiblePasswordEncryption", "AccountNotDelegated", "AccountExpirationDate", 
-                               "TrustedForDelegation", "instanceType", "AddedProperties", 
-                               "CanonicalName", "HomedirRequired", "DoesNotRequirePreAuth", "ModifiedProperties", "LastKnownParent", 
-                               "sDRightsEffective", "countryCode", "msDS-User-Account-Control-Computed", "PropertyCount", "uSNChanged", 
-                               "SIDHistory", "codePage", "dSCorePropagationData", "Manager", "MemberOf", 
-                               "DistinguishedName", "isDeleted", "primaryGroupID", "userCertificate", "Deleted", "SID", "PropertyNames",
-                               "MNSLogonAccount", "nTSecurityDescriptor", "BadLogonCount", "UseDESKeyOnly", "isCriticalSystemObject", 
-                               "TrustedToAuthForDelegation", "uSNCreated", "Created", "ObjectGUID", "LastLogonDate", "createTimeStamp", 
-                               "sAMAccountType", "whenChanged", "accountExpires", "PasswordExpired", "CN", "LastBadPasswordAttempt", 
-                               "PrimaryGroup", "PasswordLastSet", "RemovedProperties", "whenCreated", "AccountLockoutTime", 
-                               "ObjectCategory", "ProtectedFromAccidentalDeletion", "Modified", "objectSid", "pwdLastSet", "Name", 
-                               "modifyTimeStamp", "AuthenticationPolicy", "PrincipalsAllowedToDelegateToAccount", 
-                               "AuthenticationPolicySilo")
-
                         Try {
                             New-ADUser @newUserParams -ErrorAction Stop
                         } Catch {
@@ -364,29 +346,6 @@ process {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdUser.DistinguishedName)"
                         } else {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
-                        }
-
-                        # Add properties except password related
-                        $setUserProps = @{}
-                        foreach ($key in $objectProps.PSObject.Properties.Name) {
-                            if ($null -ne $objectProps.$key -and $key -notin $excludedProperties) {
-                                # Convert Boolean and DateTime values
-                                if ($key -match '^(CompoundIdentitySupported|TrustedForDelegation|AllowReversiblePasswordEncryption|AccountNotDelegated|DoesNotRequirePreAuth|SmartcardLogonRequired)$') {
-                                    $setUserProps[$key] = [System.Nullable[System.Boolean]]::Parse($objectProps.$key)
-                                } elseif ($key -eq 'AccountExpirationDate') {
-                                    $setUserProps[$key] = [System.Nullable[System.DateTime]]::Parse($objectProps.$key)
-                                } else {
-                                    $setUserProps[$key] = $objectProps.$key
-                                }
-                            }
-                        }
-                        if ($setUserProps.Count -gt 0) {
-                            try {
-                                Set-ADUser -Identity $sAMAccountName @setUserProps -ErrorAction Stop
-                            } catch {
-                                Write-Error "Failed to set common property for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set common property for user: ${sAMAccountName} - $_"
-                            }
                         }
 
                         # Set "userAccountControl" property related special control bits
