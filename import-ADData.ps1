@@ -381,7 +381,7 @@ process {
                             }
                         } catch {
                             Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set userAccountControl flags for user $($_.sAMAccountName): $_"
+                            Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
                         }
 
                         # Set password if the CSV provides Password
