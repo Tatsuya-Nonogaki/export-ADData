@@ -82,7 +82,7 @@
 .PARAMETER UserFile
   (Alias -uf) Optional. Path of input user CSV file. Path selection dialog will ask you if omitted despite -User switch is set.
   Note: If you want to register passwords for users, add a "Password" column to the CSV file and provide passwords in plain text.
-  Password is requred to set Enable flag of the account.
+  Password is required to set Enable flag of the account.
 
 .PARAMETER Group
   (Alias -g) Operates in group import mode. If -GroupFile is specified, this switch is implied and can be omitted.
