@@ -1,17 +1,14 @@
 # Export-ADData
 
 ## Overview
-`Export-ADData` is a PowerShell script designed to export Active Directory (AD) Users and Groups to CSV files. It allows for flexible export options, including filtering out system objects and redirecting specific objects to designated Organizational Units (OUs).
+`Export-ADData` is a PowerShell script designed to export Active Directory (AD) Users and Groups to CSV files. It allows for flexible export options.
 
-`Import-ADData` is a complementary PowerShell script designed to import AD Users and Groups from CSV files back into Active Directory. It supports various import options, including handling system objects and creating missing OUs during the import process.
+`Import-ADData` is a complementary PowerShell script designed to import AD Users and Groups from CSV files back into Active Directory. Domain base name can be different from that of exported AD. It supports various import options, including handling system objects and creating missing OUs during the import process.
 
 ## Features
 ### Export-ADData
 - Export AD Users and Groups to CSV.
-- Optionally exclude system objects.
 - Handle `CN=Users` objects differently by redirecting them to a designated OU.
-- Flexible DN path generation from domain prefixes.
-- Clear logging for skipped system objects.
 
 ### Import-ADData
 - Import AD Users and Groups from CSV.
@@ -52,12 +49,6 @@
 .PARAMETER OutPath
   (Alias -o) Optional. Folder path where you want to save output CSV files.
   If omitted, a path selection dialog will appear.
-
-.PARAMETER IncludeSystemObject
-  Optional. If set, includes system objects in the export. Default is $false.
-
-.PARAMETER CreateOUIfNotExists
-  Optional. If set, creates missing OUs during DN conversion. Default is $false.
 ```
 
 ### Import-ADData
@@ -69,7 +60,7 @@
 .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.4
+  Version: 0.7.5
 
 .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -91,6 +82,7 @@
 .PARAMETER UserFile
   (Alias -uf) Optional. Path of input user CSV file. Path selection dialog will ask you if omitted despite -User switch is set.
   Note: If you want to register passwords for users, add a "Password" column to the CSV file and provide passwords in plain text.
+  Password is requred to set Enable flag of the account.
 
 .PARAMETER Group
   (Alias -g) Operates in group import mode. If -GroupFile is specified, this switch is implied and can be omitted.
@@ -115,11 +107,11 @@
 .\import-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -UserFile "C:\ADExport\Users_unit_mydomain_local.csv"
 
 # Import AD Users and Groups from CSV including system objects
-.\import-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -UserFile "C:\ADExport\Users_unit_mydomain_local.csv" -GroupFile "C:\ADExport\Groups_unit_mydomain_local.csv" -IncludeSystemObject:$true
+.\import-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -UserFile "C:\ADExport\Users_unit_mydomain_local.csv" -GroupFile "C:\ADExport\Groups_unit_mydomain_local.csv" -IncludeSystemObject
 ```
 
 ## Logging
-Both scripts maintain clear logging of actions performed, including any errors encountered. Logs are saved in the script directory with the name `export-ADData.log` or `import-ADData.log`.
+Import script maintain clear logging of actions performed, including any errors encountered. Logs are saved in the script directory with the name `import-ADData.log`.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
