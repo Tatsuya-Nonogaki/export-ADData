@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.4h
+  Version: 0.7.5
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -393,8 +393,8 @@ process {
                                     Write-Host "  => Account enabled: ${sAMAccountName}"
                                     Write-Log "Account enabled: sAMAccountName=${sAMAccountName}"
                                 } else {
-                                    Write-Error "Cannot enable account for user ${sAMAccountName} as no password is set."
-                                    Write-Log "Cannot enable account for user ${sAMAccountName} as no password is set."
+                                    Write-Host "Warning: Cannot enable account ${sAMAccountName} as no password is set" -ForegroundColor Yellow
+                                    Write-Log "Cannot enable account ${sAMAccountName} as no password is set"
                                 }
                             }
                         } catch {
