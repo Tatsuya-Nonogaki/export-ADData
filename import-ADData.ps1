@@ -446,7 +446,12 @@ process {
                             if ($group -ne "") {
                                 try {
                                     $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
-                                    Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
+                                    
+                                    # Check if the group exists in the DNPath, otherwise redirect to new default OU
+                                    if (-not (Get-ADGroup -Filter "DistinguishedName -eq '$newDN'" -ErrorAction SilentlyContinue)) {
+                                        $newDN = $newDN -replace "CN=Users", "OU=$ImportOUName"
+                                    }
+                                    Add-ADGroupMember -Identity $newDN -Members $($createdUser.DistinguishedName)
                                     Write-Host "Added user $sAMAccountName to group: $newDN"
                                     Write-Log "User: sAMAccountName=$sAMAccountName added to group: $newDN"
                                 } catch {
