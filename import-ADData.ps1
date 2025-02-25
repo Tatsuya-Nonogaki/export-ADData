@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.5
+  Version: 0.7.6
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -38,7 +38,8 @@
   dialog will ask you if omitted despite -User switch is set.
   Note: If you want to register password to any users, make a copy of 
   the whole CSV file, add "Password" column to it, which is missing from 
-  the original, and put password in plain text.
+  the original, and put password in plain text. Password is required to 
+  set Enable flag of the account.
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. If -GroupFile (below)
@@ -51,7 +52,11 @@
  .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system object, 
   such as: Administrator(s), Domain Admins and COMPUTER$ and trusted 
-  DOMAIN$. This is usually dangerous and leads to AD system beak down.
+  DOMAIN$. This is usually dangerous and leads to AD system break down.
+
+ .PARAMETER NewUPNSuffix
+  Optional. New UserPrincipalName suffix to use for conversion. If not provided, 
+  script will convert UPN based on DNPath.
 #>
 [CmdletBinding()]
 param(
@@ -83,7 +88,10 @@ param(
     [string]$GroupFile,
 
     [Parameter()]
-    [switch]$IncludeSystemObject
+    [switch]$IncludeSystemObject,
+
+    [Parameter()]
+    [string]$NewUPNSuffix
 )
 
 begin {
@@ -174,7 +182,7 @@ process {
         # Assume DC are the last DCDepth elements
         $dcParts = $domainParts[-$DCDepth..-1]
 
-        # Assume the shalower elements are OU
+        # Assume the shallower elements are OU
         $ouParts = $domainParts[0..($domainParts.Count - $DCDepth - 1)]
 
         foreach ($ou in [array]::Reverse($ouParts)) {
@@ -319,19 +327,22 @@ process {
                         $ouPath = ConvertDNBase -oldDN $_.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
                         $managerDN = if ($_.Manager -ne "") { Get-NewDN -originalDN $_.Manager -DNPath $DNPath } else { $null }
 
+                        # Convert UserPrincipalName to new suffix
+                        $upnParts = $_.UserPrincipalName -split "@"
+                        $upnPrefix = $upnParts[0]
+                        $upnSuffix = if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) { $NewUPNSuffix } else { $DNPath -replace "OU=.*?,", "" -replace "DC=", "" -replace ",", "." }
+                        $newUserPrincipalName = "${upnPrefix}@${upnSuffix}"
+
                         $newUserParams = @{
                             Name              = $_.Name
                             DisplayName       = $_.DisplayName
                             SamAccountName    = $sAMAccountName
                             Description       = $_.Description
                             Path              = $ouPath
-                            UserPrincipalName = $_.UserPrincipalName
+                            UserPrincipalName = $newUserPrincipalName
                             GivenName         = $_.GivenName
                             Surname           = $_.Surname
-                            Department        = $_.Department
-                            Title             = $_.Title
                             Manager           = $managerDN
-                            # Define EmailAddress or other properties here if needed
                         }
 
                         Try {
@@ -346,6 +357,44 @@ process {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdUser.DistinguishedName)"
                         } else {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
+                        }
+
+                        # Set additional properties using Set-ADUser
+                        $additionalProperties = @{
+                            ProfilePath   = $_.ProfilePath
+                            ScriptPath    = $_.ScriptPath
+                            Company       = $_.Company
+                            Department    = $_.Department
+                            Title         = $_.Title
+                            Office        = $_.Office
+                            OfficePhone   = $_.OfficePhone
+                            EmailAddress  = $_.EmailAddress
+                            StreetAddress = $_.StreetAddress
+                            City          = $_.City
+                            State         = $_.State
+                            Country       = $_.Country
+                            PostalCode    = $_.PostalCode
+                            MobilePhone   = $_.MobilePhone
+                            HomePhone     = $_.HomePhone
+                            Fax           = $_.Fax
+                            Pager         = $_.Pager
+                        }
+
+                        foreach ($property in $additionalProperties.Keys) {
+                            if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
+                                $params = @{
+                                    Identity = $sAMAccountName
+                                }
+                                $params[$property] = $additionalProperties[$property]
+                                Try {
+                                    Set-ADUser @params
+                                    Write-Host "  => Property $property set for user: $sAMAccountName"
+                                    Write-Log "Property $property set for user: sAMAccountName=$sAMAccountName"
+                                } Catch {
+                                    Write-Host "Warning: Failed to set property $property for user ${sAMAccountName}" -ForegroundColor Yellow
+                                    Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName - $_"
+                                }
+                            }
                         }
 
                         # Set password if the CSV provides Password
@@ -470,6 +519,7 @@ process {
                           # ManagedBy      = $NewManagedBy   # produces error when DN missing on new AD
                             GroupCategory  = "Security" # modified later if necessary
                             GroupScope     = "Global"   # modified later if necessary
+                            # Define other properties here if needed
                         }
 
                         # Determine GroupCategory based on CSV values
