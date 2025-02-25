@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.5a
+  Version: 0.7.5b
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -345,7 +345,10 @@ process {
                             Department        = $_.Department
                             Title             = $_.Title
                             Manager           = $managerDN
-                            # Define EmailAddress or other properties here if needed
+                            ScriptPath        = $_.ScriptPath
+                            Company           = $_.Company
+                            Office            = $_.Office
+                            OfficePhone       = $_.OfficePhone
                         }
 
                         Try {
@@ -360,6 +363,33 @@ process {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdUser.DistinguishedName)"
                         } else {
                             Write-Log "User Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
+                        }
+
+                        # Set additional properties using Set-ADUser
+                        $additionalProperties = @{
+                            EmailAddress  = $_.EmailAddress
+                            StreetAddress = $_.StreetAddress
+                            City          = $_.City
+                            State         = $_.State
+                            PostalCode    = $_.PostalCode
+                            Country       = $_.Country
+                            MobilePhone   = $_.MobilePhone
+                            Pager         = $_.Pager
+                            HomePhone     = $_.HomePhone
+                            Fax           = $_.Fax
+                        }
+
+                        foreach ($property in $additionalProperties.Keys) {
+                            if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
+                                Try {
+                                    Set-ADUser -Identity $sAMAccountName -$property $additionalProperties[$property]
+                                    Write-Host "  => Property $property set for user: $sAMAccountName"
+                                    Write-Log "Property $property set for user: sAMAccountName=$sAMAccountName"
+                                } Catch {
+                                    Write-Host "Warning: Failed to set property $property for user ${sAMAccountName}" -ForegroundColor Yellow
+                                    Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName - $_"
+                                }
+                            }
                         }
 
                         # Set password if the CSV provides Password
@@ -484,6 +514,7 @@ process {
                           # ManagedBy      = $NewManagedBy   # produces error when DN missing on new AD
                             GroupCategory  = "Security" # modified later if necessary
                             GroupScope     = "Global"   # modified later if necessary
+                            # Define other properties here if needed
                         }
 
                         # Determine GroupCategory based on CSV values
