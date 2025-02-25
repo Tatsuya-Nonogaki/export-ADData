@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.5b
+  Version: 0.7.5d
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -342,13 +342,7 @@ process {
                             UserPrincipalName = $newUserPrincipalName
                             GivenName         = $_.GivenName
                             Surname           = $_.Surname
-                            Department        = $_.Department
-                            Title             = $_.Title
                             Manager           = $managerDN
-                            ScriptPath        = $_.ScriptPath
-                            Company           = $_.Company
-                            Office            = $_.Office
-                            OfficePhone       = $_.OfficePhone
                         }
 
                         Try {
@@ -367,22 +361,33 @@ process {
 
                         # Set additional properties using Set-ADUser
                         $additionalProperties = @{
+                            ProfilePath   = $_.ProfilePath
+                            ScriptPath    = $_.ScriptPath
+                            Company       = $_.Company
+                            Department    = $_.Department
+                            Title         = $_.Title
+                            Office        = $_.Office
+                            OfficePhone   = $_.OfficePhone
                             EmailAddress  = $_.EmailAddress
                             StreetAddress = $_.StreetAddress
                             City          = $_.City
                             State         = $_.State
-                            PostalCode    = $_.PostalCode
                             Country       = $_.Country
+                            PostalCode    = $_.PostalCode
                             MobilePhone   = $_.MobilePhone
-                            Pager         = $_.Pager
                             HomePhone     = $_.HomePhone
                             Fax           = $_.Fax
+                            Pager         = $_.Pager
                         }
 
                         foreach ($property in $additionalProperties.Keys) {
                             if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
+                                $params = @{
+                                    Identity = $sAMAccountName
+                                }
+                                $params[$property] = $additionalProperties[$property]
                                 Try {
-                                    Set-ADUser -Identity $sAMAccountName -$property $additionalProperties[$property]
+                                    Set-ADUser @params
                                     Write-Host "  => Property $property set for user: $sAMAccountName"
                                     Write-Log "Property $property set for user: sAMAccountName=$sAMAccountName"
                                 } Catch {
