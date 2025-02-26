@@ -60,7 +60,7 @@
 .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.5
+  Version: 0.7.6
 
 .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -92,6 +92,9 @@
 
 .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system objects. This is usually dangerous and can lead to AD system breakdown.
+
+.PARAMETER NewUPNSuffix
+  Optional. New UserPrincipalName suffix to use for conversion. If not provided, script will convert UPN based on DNPath.
 ```
 
 ## Examples
@@ -103,6 +106,9 @@
 
 ### Importing AD Data
 ```powershell
+# Import AD Groups from CSV excluding system objects
+.\import-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -GroupFile "C:\ADExport\Groups_unit_mydomain_local.csv"
+
 # Import AD Users from CSV excluding system objects
 .\import-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -UserFile "C:\ADExport\Users_unit_mydomain_local.csv"
 
