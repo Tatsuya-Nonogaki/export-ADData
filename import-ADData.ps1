@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6
+  Version: 0.7.6a
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -262,9 +262,14 @@ process {
 
                         if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentPath'" -ErrorAction SilentlyContinue)) {
                             $ouName = $ouList[$i] -replace "^OU=", ""
-                            New-ADOrganizationalUnit -Name $ouName -Path ($currentPath -replace ",$ouList[$i]$") -ProtectedFromAccidentalDeletion $false
-                            Write-Host "Created OU: $currentPath"
-                            Write-Log "OU Created: DistinguishedName=$currentPath"
+                            Try {
+                                New-ADOrganizationalUnit -Name $ouName -Path ($currentPath -replace ",$ouList[$i]$") -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                Write-Host "OU Created: $currentPath"
+                                Write-Log "OU Created: $currentPath"
+                            } catch {
+                                Write-Error "Failed to create OU $currentPath"
+                                Write-Log "Failed to create OU: $currentPath - $_"
+                            }
                         }
                     }
                 }
@@ -276,9 +281,14 @@ process {
     
             if ($CreateOUIfNotExists) {
                 if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$importTargetOU'" -ErrorAction SilentlyContinue)) {
-                    New-ADOrganizationalUnit -Name $ImportOUName -Path $newDNPath -ErrorAction Stop
-                    Write-Host "Created default Import OU: $importTargetOU"
-                    Write-Log "OU Created: DistinguishedName=$importTargetOU"
+                    try {
+                        New-ADOrganizationalUnit -Name $ImportOUName -Path $newDNPath -ErrorAction Stop
+                        Write-Host "Created default Import OU: $importTargetOU"
+                        Write-Log "OU Created: $importTargetOU"
+                    } catch {
+                        Write-Error "Failed to create OU $importTargetOU"
+                        Write-Log "Failed to create OU: $importTargetOU - $_"
+                    }
                 }
             }
     
@@ -540,33 +550,38 @@ process {
 
                         Try {
                             New-ADGroup @newGroupParams -ErrorAction Stop
+                        } Catch {
+                            Write-Error "Failed to create group ${sAMAccountName}: $_"
+                            Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
+                        }
 
-                            $createdGroup = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
-                            if ($createdGroup) {
-                                Write-Log "Group Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdGroup.DistinguishedName)"
-                            } else {
-                                Write-Log "Group Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
-                            }
 
-                            # Add this group to parent groups
-                            $memberOfGroups = $_.MemberOf -split ';'
-                            foreach ($group in $memberOfGroups) {
-                                if ($group -ne "") {
-                                    try {
-                                        $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
-                                        Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
-                                        Write-Host "Added group $sAMAccountName to parent group: $newDN"
-                                        Write-Log "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
-                                    } catch {
-                                        Write-Host "Failed to add group $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
-                                        Write-Log "Failed to add group sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                        $createdGroup = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
+                        if ($createdGroup) {
+                            Write-Log "Group Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdGroup.DistinguishedName)"
+                        } else {
+                            Write-Log "Group Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
+                        }
+
+                        # Add this group to parent groups
+                        $memberOfGroups = $_.MemberOf -split ';'
+                        foreach ($group in $memberOfGroups) {
+                            if ($group -ne "") {
+                                try {
+                                    $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
+
+                                    # Check if the group exists in the DNPath, otherwise redirect to new default OU
+                                    if (-not (Get-ADGroup -Filter "DistinguishedName -eq '$newDN'" -ErrorAction SilentlyContinue)) {
+                                        $newDN = $newDN -replace "CN=Users", "OU=$ImportOUName"
                                     }
+                                    Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
+                                    Write-Host "Added group $sAMAccountName to parent group: $newDN"
+                                    Write-Log "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
+                                } catch {
+                                    Write-Host "Failed to add group $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
+                                    Write-Log "Failed to add group sAMAccountName=$sAMAccountName to group: $newDN - $_"
                                 }
                             }
-                            Write-Host "Imported group: $sAMAccountName"
-                        } Catch {
-                            Write-Error "Failed to import group ${sAMAccountName}: $_"
-                            Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
                         }
                     } else {
                         Write-Host "Group $sAMAccountName already exists; skipping import"
