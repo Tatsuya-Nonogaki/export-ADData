@@ -56,9 +56,9 @@ process {
 
                       # if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentPath'" -ErrorAction SilentlyContinue)) {
                             $ouName = $ouList[$i] -replace "^OU=", ""
-                            $cmdstring = "New-ADOrganizationalUnit -Name $ouName -Path " + $($currentPath -replace ",$($ouList[$i])$") + " -ProtectedFromAccidentalDeletion `$false -ErrorAction Stop"
+                            $cmdstring = "New-ADOrganizationalUnit -Name $ouName -Path '$($currentPath -replace ",$($ouList[$i])$")' -ProtectedFromAccidentalDeletion `$false -ErrorAction Stop"
                             $cmdstring | Write-Host
-                          # New-ADOrganizationalUnit -Name $ouName -Path ($currentPath -replace ",$ouList[$i]$") -ProtectedFromAccidentalDeletion $false
+                      #     New-ADOrganizationalUnit -Name $ouName -Path ($currentPath -replace ",$ouList[$i]$") -ProtectedFromAccidentalDeletion $false
                             Write-Host "Created OU: $currentPath"
                             Write-Log "OU Created: DistinguishedName=$currentPath"
                       # }
