@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6d
+  Version: 0.7.6e
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -261,25 +261,25 @@ process {
                     if ($ouList[$i] -match "^OU=") {
                         $ouName = $ouList[$i] -replace "^OU=", ""
                         $calculatedOUPath = if ($i -eq 0 -and $newDNPath -notmatch "^OU=") {
-                            ""
+                            $newDNPath
                         } else {
                             $previousOUBase
                         }
 
-                        $currentOUBase = if ($calculatedOUPath) {
+                        $currentOUBase = if ($calculatedOUPath -ne $newDNPath) {
                             "OU=$ouName,$calculatedOUPath"
                         } else {
-                            "OU=$ouName"
+                            "OU=$ouName,$newDNPath"
                         }
 
                         $previousOUBase = $currentOUBase
 
                         if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
                             try {
-                                if ($calculatedOUPath) {
+                                if ($calculatedOUPath -ne $newDNPath) {
                                     New-ADOrganizationalUnit -Name $ouName -Path $calculatedOUPath -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 } else {
-                                    New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                    New-ADOrganizationalUnit -Name $ouName -Path $newDNPath -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 }
                                 Write-Host "OU Created: $currentOUBase"
                                 Write-Log "OU Created: $currentOUBase"
@@ -294,7 +294,7 @@ process {
             return $importTargetOU
         }
         elseif ($oldDN -match "^CN=.*?,CN=Users,") {
-            $importTargetOU = "$newDNPath"
+            $importTargetOU = "OU=$ImportOUName,$newDNPath"
             Write-Host "Redirected CN=Users object to: $importTargetOU"
             return $importTargetOU
         }
