@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6c
+  Version: 0.7.6d
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -27,7 +27,7 @@
   (Alias -p) Optional. Mutually exclusive with DNPrefix and DCDepth. 
   Instead of specifying DNPrefix (optionally with DCDepth), you can 
   explicitly specify it in DistinguishedName format. This is preferable 
-  for accuracy, if you are familiar with DN expression of AD components. 
+  for accuracy, if you are familiar with DN expression of AD components.
 
  .PARAMETER User
   (Alias -u) Operates in user import mode. If -UserFile (below)
@@ -245,6 +245,7 @@ process {
             [switch]$CreateOUIfNotExists
         )
 
+        # Obtain leading OU part
         $dnParts = $oldDN -split ","
         $ouParts = $dnParts | Where-Object { $_ -match "^OU=" }
 
@@ -253,35 +254,38 @@ process {
 
             if ($CreateOUIfNotExists) {
                 $ouList = $importTargetOU -split ","
-                $currentPath = $newDNPath
+                $currentOUBase = $newDNPath
+                $previousOUBase = ""
 
                 for ($i = 0; $i -lt $ouList.Count; $i++) {
                     if ($ouList[$i] -match "^OU=") {
                         $ouName = $ouList[$i] -replace "^OU=", ""
-                        $calculatedPath = if ($i -eq 0 -and $newDNPath -notmatch "^OU=") {
+                        $calculatedOUPath = if ($i -eq 0 -and $newDNPath -notmatch "^OU=") {
                             ""
                         } else {
-                            $currentPath
+                            $previousOUBase
                         }
 
-                        if ($calculatedPath) {
-                            $currentPath = "OU=$ouName,$currentPath"
+                        $currentOUBase = if ($calculatedOUPath) {
+                            "OU=$ouName,$calculatedOUPath"
                         } else {
-                            $currentPath = "OU=$ouName"
+                            "OU=$ouName"
                         }
 
-                        if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentPath'" -ErrorAction SilentlyContinue)) {
+                        $previousOUBase = $currentOUBase
+
+                        if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
                             try {
-                                if ($calculatedPath) {
-                                    New-ADOrganizationalUnit -Name $ouName -Path $calculatedPath -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                if ($calculatedOUPath) {
+                                    New-ADOrganizationalUnit -Name $ouName -Path $calculatedOUPath -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 } else {
                                     New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 }
-                                Write-Host "OU Created: $currentPath"
-                                Write-Log "OU Created: $currentPath"
+                                Write-Host "OU Created: $currentOUBase"
+                                Write-Log "OU Created: $currentOUBase"
                             } catch {
-                                Write-Error "Failed to create OU $currentPath"
-                                Write-Log "Failed to create OU: $currentPath - $_"
+                                Write-Error "Failed to create OU $currentOUBase"
+                                Write-Log "Failed to create OU: $currentOUBase - $_"
                             }
                         }
                     }
@@ -553,7 +557,6 @@ process {
                             Write-Error "Failed to create group ${sAMAccountName}: $_"
                             Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
                         }
-
 
                         $createdGroup = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
                         if ($createdGroup) {
