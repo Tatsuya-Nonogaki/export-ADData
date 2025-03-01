@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6e
+  Version: 0.7.6f
 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -253,42 +253,38 @@ process {
             $importTargetOU = "$($ouParts -join ","),$newDNPath"
 
             if ($CreateOUIfNotExists) {
-                $ouList = $importTargetOU -split ","
+                $ouList = $importTargetOU -split "," | Where-Object { $_ -match "^OU=" }
                 $currentOUBase = $newDNPath
                 $previousOUBase = ""
 
-                for ($i = 0; $i -lt $ouList.Count; $i++) {
-                    if ($ouList[$i] -match "^OU=") {
-                        $ouName = $ouList[$i] -replace "^OU=", ""
-                        $calculatedOUPath = if ($i -eq 0 -and $newDNPath -notmatch "^OU=") {
-                            $newDNPath
-                        } else {
-                            $previousOUBase
-                        }
+                for ($i = ($ouList.Count - 1); $i -ge 0; $i--) {
+                    $ou = $($ouList[$i])
+                    $ouName = $ou -replace "^OU=", ""
 
-                        $currentOUBase = if ($calculatedOUPath -ne $newDNPath) {
-                            "OU=$ouName,$calculatedOUPath"
-                        } else {
-                            "OU=$ouName,$newDNPath"
-                        }
+                    if ($previousOUBase) {
+                        $currentOUBase = $previousOUBase
+                    } else {
+                        $currentOUBase = $newDNPath
+                    }
 
-                        $previousOUBase = $currentOUBase
-
-                        if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
-                            try {
-                                if ($calculatedOUPath -ne $newDNPath) {
-                                    New-ADOrganizationalUnit -Name $ouName -Path $calculatedOUPath -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                } else {
-                                    New-ADOrganizationalUnit -Name $ouName -Path $newDNPath -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                }
-                                Write-Host "OU Created: $currentOUBase"
-                                Write-Log "OU Created: $currentOUBase"
-                            } catch {
-                                Write-Error "Failed to create OU $currentOUBase"
-                                Write-Log "Failed to create OU: $currentOUBase - $_"
+                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
+                        try {
+                            if ($previousOUBase) {
+                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                Write-Host "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
+                            } else {
+                                New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                Write-Host "New-ADOrganizationalUnit -Name $ouName"
                             }
+
+                            Write-Host "OU Created: ${ou},$currentOUBase"
+                            Write-Log "OU Created: ${ou},$currentOUBase"
+                        } catch {
+                            Write-Error "Failed to create OU ${ou},$currentOUBase"
+                            Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                         }
                     }
+                    $previousOUBase = $ou + "," + $currentOUBase
                 }
             }
             return $importTargetOU
