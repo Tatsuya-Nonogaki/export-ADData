@@ -1,19 +1,19 @@
 <#
  .SYNOPSIS
   Imports group and users into Active Directory.
-
+ 
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6f
-
+  Version: 0.7.6g
+ 
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
   Domain component into which you want import objects. 
   For example: "unit.mydomain.local" which is converted to 
   DistinguishedName(DNPath) "OU=unit,DC=mydomain,DC=local" internally.
   IMPORTANT: Target DN structure must exist on the destination AD before import.
-
+ 
  .PARAMETER DCDepth
   Optional. Mutually exclusive with DNPath. 
   In calculation of the DNPath, we assume the last 2 elements are DC 
@@ -22,17 +22,17 @@
    DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
    DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
   -DCDepth 4: DNPath becomes DC=dept,DC=unit,DC=mydomain,DC=local
-
+ 
  .PARAMETER DNPath
   (Alias -p) Optional. Mutually exclusive with DNPrefix and DCDepth. 
   Instead of specifying DNPrefix (optionally with DCDepth), you can 
   explicitly specify it in DistinguishedName format. This is preferable 
   for accuracy, if you are familiar with DN expression of AD components.
-
+ 
  .PARAMETER User
   (Alias -u) Operates in user import mode. If -UserFile (below)
   is specified, this switch is implied and can be omitted.
-
+ 
  .PARAMETER UserFile
   (Alias -uf) Optional. Path of input user CSV file. Path selection
   dialog will ask you if omitted despite -User switch is set.
@@ -40,20 +40,20 @@
   the whole CSV file, add "Password" column to it, which is missing from 
   the original, and put password in plain text. Password is required to 
   set Enable flag of the account.
-
+ 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. If -GroupFile (below)
   is specified, this switch is implied and can be omitted.
-
+ 
  .PARAMETER GroupFile
   (Alias -gf) Optional. Path of input group CSV file. Path selection
   dialog will ask you if omitted despite -Group switch is set.
-
+ 
  .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system object, 
   such as: Administrator(s), Domain Admins and COMPUTER$ and trusted 
   DOMAIN$. This is usually dangerous and leads to AD system break down.
-
+ 
  .PARAMETER NewUPNSuffix
   Optional. New UserPrincipalName suffix to use for conversion. If not provided, 
   script will convert UPN based on DNPath.
@@ -254,7 +254,6 @@ process {
 
             if ($CreateOUIfNotExists) {
                 $ouList = $importTargetOU -split "," | Where-Object { $_ -match "^OU=" }
-                $currentOUBase = $newDNPath
                 $previousOUBase = ""
 
                 for ($i = ($ouList.Count - 1); $i -ge 0; $i--) {
@@ -269,12 +268,12 @@ process {
 
                     if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
                         try {
-                            if ($previousOUBase) {
-                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                Write-Host "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
-                            } else {
+                            if ($currentOUBase -eq $newDNPath) {
                                 New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 Write-Host "New-ADOrganizationalUnit -Name $ouName"
+                            } else {
+                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                Write-Host "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
                             }
 
                             Write-Host "OU Created: ${ou},$currentOUBase"
