@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6h
+  Version: 0.7.6i
  
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -99,10 +99,6 @@ begin {
 
     $scriptdir = Split-Path -Path $myInvocation.MyCommand.Path -Parent
     $LogFilePath = "$scriptdir\import-ADData.log"
-
-    # Destination OU of users those originally belonged to CN=Users,<domainroot>.
-    # "OU=$ImportOUName,$DNPath" will be created if it doesn't exist.
-    $ImportOUName = "ImportUsers"
 
     function Write-Log {
         param (
@@ -252,14 +248,17 @@ process {
         if ($ouParts) {
             $importTargetOU = "$($ouParts -join ","),$newDNPath"
 
+            Write-Log "debug :: importTargetOU = $importTargetOU"
             if ($CreateOUIfNotExists) {
-                $ouList = $importTargetOU -split "," | Where-Object { $_ -match "^OU=" }
+                $ouList = $importTargetOU -split ",\s*" | Where-Object { $_ -match "^OU=" }
                 [array]::Reverse($ouList)
                 $previousOUBase = ""
 
                 foreach ($ou in $ouList) {
                     $ou = $ou.Trim()
+                    Write-Log "debug :: processing ou = $ou"
                     $ouName = $ou -replace "^OU=", ""
+                    Write-Log "debug :: ouName = $ouName"
 
                     if ($previousOUBase) {
                         $currentOUBase = $previousOUBase
@@ -267,14 +266,18 @@ process {
                         $currentOUBase = $newDNPath
                     }
 
+                    Write-Log "debug :: currentOUBase = $currentOUBase"
+
                     if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
                         try {
                             if ($currentOUBase -eq $newDNPath) {
                                 New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 Write-Host "New-ADOrganizationalUnit -Name $ouName"
+                                Write-Log "New-ADOrganizationalUnit -Name $ouName"
                             } else {
                                 New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 Write-Host "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
+                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
                             }
 
                             Write-Host "OU Created: ${ou},$currentOUBase"
@@ -284,14 +287,14 @@ process {
                             Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                         }
                     }
-                    $previousOUBase = $ou + "," + $currentOUBase
+                    $previousOUBase = "OU=${ouName},$currentOUBase"
                 }
             }
             return $importTargetOU
         }
-        elseif ($oldDN -match "^CN=.*?,CN=Users,") {
-            $importTargetOU = $newDNPath
-            Write-Log "Temporarily translated CN=Users object: $oldDN to: $newDNPath for operation"
+        elseif ($oldDN -match "^CN=.*?,CN=Users,DC=") {
+            $importTargetOU = "CN=Users," + ($newDNPath -replace "^.*?,(DC=.*$)", '$1')
+            Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
             return $importTargetOU
         }
         else {
@@ -347,7 +350,7 @@ process {
                             DisplayName       = $_.DisplayName
                             SamAccountName    = $sAMAccountName
                             Description       = $_.Description
-                            Path              = $ouPath
+                            Path              = $ouPath -replace "CN=Users,(DC=.*$)", '$1'
                             UserPrincipalName = $newUserPrincipalName
                             GivenName         = $_.GivenName
                             Surname           = $_.Surname
@@ -430,7 +433,7 @@ process {
                             }
                             if ($userFlags -band 0x40) {                     # CannotChangePassword
                                 $user = Get-ADUser -Identity $sAMAccountName
-                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq 'bf967a8b-0de6-11d0-a285-00aa003049e2' } })
+                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq [guid]"00299570-246d-11d0-a768-00aa006e0529" } })
                                 Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
                                 Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
                             }
@@ -466,11 +469,7 @@ process {
                             if ($group -ne "") {
                                 try {
                                     $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
-                                    
-                                    # Check if the group exists in the DNPath, otherwise redirect to new default OU
-                                    if (-not (Get-ADGroup -Filter "DistinguishedName -eq '$newDN'" -ErrorAction SilentlyContinue)) {
-                                        $newDN = $newDN -replace "CN=Users", "OU=$ImportOUName"
-                                    }
+
                                     Add-ADGroupMember -Identity $newDN -Members $($createdUser.DistinguishedName)
                                     Write-Host "Added user $sAMAccountName to group: $newDN"
                                     Write-Log "User: sAMAccountName=$sAMAccountName added to group: $newDN"
@@ -525,7 +524,7 @@ process {
                             SamAccountName = $sAMAccountName
                             Description    = $_.Description
                             Path           = $ouPath
-                          # ManagedBy      = $NewManagedBy   # produces error when DN missing on new AD
+                            # ManagedBy      = $NewManagedBy   # produces error when DN missing on new AD
                             GroupCategory  = "Security" # modified later if necessary
                             GroupScope     = "Global"   # modified later if necessary
                             # Define other properties here if needed
@@ -568,10 +567,6 @@ process {
                                 try {
                                     $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
 
-                                    # Check if the group exists in the DNPath, otherwise redirect to new default OU
-                                    if (-not (Get-ADGroup -Filter "DistinguishedName -eq '$newDN'" -ErrorAction SilentlyContinue)) {
-                                        $newDN = $newDN -replace "CN=Users", "OU=$ImportOUName"
-                                    }
                                     Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
                                     Write-Host "Added group $sAMAccountName to parent group: $newDN"
                                     Write-Log "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
