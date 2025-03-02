@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6g
+  Version: 0.7.6h
  
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -254,10 +254,11 @@ process {
 
             if ($CreateOUIfNotExists) {
                 $ouList = $importTargetOU -split "," | Where-Object { $_ -match "^OU=" }
+                [array]::Reverse($ouList)
                 $previousOUBase = ""
 
-                for ($i = ($ouList.Count - 1); $i -ge 0; $i--) {
-                    $ou = $($ouList[$i])
+                foreach ($ou in $ouList) {
+                    $ou = $ou.Trim()
                     $ouName = $ou -replace "^OU=", ""
 
                     if ($previousOUBase) {
@@ -289,8 +290,8 @@ process {
             return $importTargetOU
         }
         elseif ($oldDN -match "^CN=.*?,CN=Users,") {
-            $importTargetOU = "OU=$ImportOUName,$newDNPath"
-            Write-Host "Redirected CN=Users object to: $importTargetOU"
+            $importTargetOU = $newDNPath
+            Write-Log "Temporarily translated CN=Users object: $oldDN to: $newDNPath for operation"
             return $importTargetOU
         }
         else {
