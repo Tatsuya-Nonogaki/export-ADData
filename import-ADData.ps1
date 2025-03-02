@@ -523,7 +523,7 @@ process {
                             Name           = $_.Name    # or $_.CN
                             SamAccountName = $sAMAccountName
                             Description    = $_.Description
-                            Path           = $ouPath
+                            Path           = $ouPath -replace "CN=Users,(DC=.*$)", '$1'
                             # ManagedBy      = $NewManagedBy   # produces error when DN missing on new AD
                             GroupCategory  = "Security" # modified later if necessary
                             GroupScope     = "Global"   # modified later if necessary
