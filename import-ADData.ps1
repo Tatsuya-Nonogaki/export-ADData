@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6i
+  Version: 0.7.6j
  
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -491,96 +491,97 @@ process {
                                 "Account Operators", "Server Operators", "Backup Operators", "Print Operators",
                                 "Replicator", "Cert Publishers")
 
-            Import-Csv -Path $filePath | 
-              Where-Object {
-                # Exclude system group objects
-                if ($IncludeSystemObject) {
-                    return $true 
-                } else {
-                    if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -in $excludedGroups) {
-                        Write-Host "Excluded System Group: $($_.sAMAccountName)"
-                        Write-Log "Excluded System Group: sAMAccountName=$($_.sAMAccountName)"
-                        return $false
-                    } else {
-                        return $true
-                    }
-                }
-              } | 
-                ForEach-Object {
-                    $objectProps = $_
-                    $sAMAccountName = $_.sAMAccountName
-
-                    # Check existence of the group
-                    $groupExists = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -ErrorAction SilentlyContinue
-
-                    if (-not $groupExists) {
-                        # Construct parameters for New-ADGroup
-
-                        $ouPath = ConvertDNBase -oldDN $_.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
-                        $NewManagedBy = Get-NewDN -originalDN $_.ManagedBy -DNPath $DNPath
-
-                        $newGroupParams = @{
-                            Name           = $_.Name    # or $_.CN
-                            SamAccountName = $sAMAccountName
-                            Description    = $_.Description
-                            Path           = $ouPath -replace "CN=Users,(DC=.*$)", '$1'
-                            # ManagedBy      = $NewManagedBy   # produces error when DN missing on new AD
-                            GroupCategory  = "Security" # modified later if necessary
-                            GroupScope     = "Global"   # modified later if necessary
-                            # Define other properties here if needed
-                        }
-
-                        # Determine GroupCategory based on CSV values
-                        if ($_.groupType -band 0x80000000) {
-                            $newGroupParams.GroupCategory = "Security"
+            # Import and sort groups by the total character length of MemberOf property
+            $groups = Import-Csv -Path $filePath | 
+                      Where-Object {
+                        if ($IncludeSystemObject) {
+                            return $true 
                         } else {
-                            $newGroupParams.GroupCategory = "Distribution"
-                        }
-
-                        # Determine GroupScope based on CSV values
-                        if ($_.groupType -band 0x2) {
-                            $newGroupParams.GroupScope = "Global"
-                        } elseif ($_.groupType -band 0x4) {
-                            $newGroupParams.GroupScope = "DomainLocal"
-                        } elseif ($_.groupType -band 0x8) {
-                            $newGroupParams.GroupScope = "Universal"
-                        }
-
-                        Try {
-                            New-ADGroup @newGroupParams -ErrorAction Stop
-                        } Catch {
-                            Write-Error "Failed to create group ${sAMAccountName}: $_"
-                            Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
-                        }
-
-                        $createdGroup = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
-                        if ($createdGroup) {
-                            Write-Log "Group Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdGroup.DistinguishedName)"
-                        } else {
-                            Write-Log "Group Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
-                        }
-
-                        # Add this group to parent groups
-                        $memberOfGroups = $_.MemberOf -split ';'
-                        foreach ($group in $memberOfGroups) {
-                            if ($group -ne "") {
-                                try {
-                                    $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
-
-                                    Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
-                                    Write-Host "Added group $sAMAccountName to parent group: $newDN"
-                                    Write-Log "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
-                                } catch {
-                                    Write-Host "Failed to add group $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
-                                    Write-Log "Failed to add group sAMAccountName=$sAMAccountName to group: $newDN - $_"
-                                }
+                            if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -in $excludedGroups) {
+                                Write-Host "Excluded System Group: $($_.sAMAccountName)"
+                                Write-Log "Excluded System Group: sAMAccountName=$($_.sAMAccountName)"
+                                return $false
+                            } else {
+                                return $true
                             }
                         }
-                    } else {
-                        Write-Host "Group $sAMAccountName already exists; skipping import"
-                        Write-Log "Group Skipped (Already Exists): sAMAccountName=$sAMAccountName"
+                      } | Sort-Object { $_.MemberOf.Length }
+
+            foreach ($group in $groups) {
+                $objectProps = $group
+                $sAMAccountName = $group.sAMAccountName
+
+                # Check existence of the group
+                $groupExists = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -ErrorAction SilentlyContinue
+
+                if (-not $groupExists) {
+                    # Construct parameters for New-ADGroup
+
+                    $ouPath = ConvertDNBase -oldDN $group.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
+                    $NewManagedBy = Get-NewDN -originalDN $group.ManagedBy -DNPath $DNPath
+
+                    $newGroupParams = @{
+                        Name           = $group.Name    # or $group.CN
+                        SamAccountName = $sAMAccountName
+                        Description    = $group.Description
+                        Path           = $ouPath
+                        # ManagedBy    = $NewManagedBy   # produces error when DN missing on new AD
+                        GroupCategory  = "Security" # modified later if necessary
+                        GroupScope     = "Global"   # modified later if necessary
+                        # Define other properties here if needed
                     }
+
+                    # Determine GroupCategory based on CSV values
+                    if ($group.groupType -band 0x80000000) {
+                        $newGroupParams.GroupCategory = "Security"
+                    } else {
+                        $newGroupParams.GroupCategory = "Distribution"
+                    }
+
+                    # Determine GroupScope based on CSV values
+                    if ($group.groupType -band 0x2) {
+                        $newGroupParams.GroupScope = "Global"
+                    } elseif ($group.groupType -band 0x4) {
+                        $newGroupParams.GroupScope = "DomainLocal"
+                    } elseif ($group.groupType -band 0x8) {
+                        $newGroupParams.GroupScope = "Universal"
+                    }
+
+                    Try {
+                        New-ADGroup @newGroupParams -ErrorAction Stop
+                    } Catch {
+                        Write-Error "Failed to create group ${sAMAccountName}: $_"
+                        Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
+                    }
+
+                    $createdGroup = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
+                    if ($createdGroup) {
+                        Write-Log "Group Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdGroup.DistinguishedName)"
+                    } else {
+                        Write-Log "Group Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
+                    }
+
+                    # Add this group to parent groups
+                    $memberOfGroups = $group.MemberOf -split ';'
+                    foreach ($parentGroup in $memberOfGroups) {
+                        if ($parentGroup -ne "") {
+                            try {
+                                $newDN = Get-NewDN -originalDN $parentGroup -DNPath $DNPath
+
+                                Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
+                                Write-Host "Added group $sAMAccountName to parent group: $newDN"
+                                Write-Log "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
+                            } catch {
+                                Write-Host "Failed to add group $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
+                                Write-Log "Failed to add group sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                            }
+                        }
+                    }
+                } else {
+                    Write-Host "Group $sAMAccountName already exists; skipping import"
+                    Write-Log "Group Skipped (Already Exists): sAMAccountName=$sAMAccountName"
                 }
+            }
         }
     }
 
