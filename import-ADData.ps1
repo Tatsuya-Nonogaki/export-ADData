@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.7
+  Version: 0.7.8
  
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -294,9 +294,57 @@ process {
             return $importTargetOU
         }
         elseif ($oldDN -match "^CN=.*?,CN=Users,DC=") {
-            $importTargetOU = "CN=Users," + ($newDNPath -replace '((?:,DC=[^,]+)+)$', '$1')
-            Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
-            return $importTargetOU
+            if ($newDNPath -match "^OU=") {
+                # Place directly under the specified DNPath without intermediate CN=Users
+                $importTargetOU = $newDNPath
+                Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
+
+                if ($CreateOUIfNotExists) {
+                    $ouList = $newDNPath -split ",\s*" | Where-Object { $_ -match "^OU=" }
+                    [array]::Reverse($ouList)
+                    $previousOUBase = ""
+
+                    foreach ($ou in $ouList) {
+                        $ou = $ou.Trim()
+                        Write-Log "debug :: processing ou = $ou"
+                        $ouName = $ou -replace "^OU=", ""
+
+                        if ($previousOUBase) {
+                            $currentOUBase = $previousOUBase
+                        } else {
+                            $currentOUBase = $newDNPath
+                        }
+
+                        Write-Log "debug :: currentOUBase = $currentOUBase"
+
+                        if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
+                            try {
+                                if ($currentOUBase -eq $newDNPath) {
+                                    New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion `$false"
+                                } else {
+                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
+                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion `$false"
+                                }
+
+                                Write-Host "OU Created: ${ou},$currentOUBase"
+                                Write-Log "OU Created: ${ou},$currentOUBase"
+                            } catch {
+                                Write-Error "Failed to create OU ${ou},$currentOUBase"
+                                Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
+                            }
+                        } else {
+                            Write-Log "OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
+                        }
+                        $previousOUBase = "OU=${ouName},$currentOUBase"
+                    }
+                }
+                return $importTargetOU
+            } else {
+                $importTargetOU = "CN=Users," + ($newDNPath -replace '((?:,DC=[^,]+)+)$', '$1')
+                Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
+                return $importTargetOU
+            }
         }
         else {
             Write-Host "No OU found in DN: $oldDN. Assigning default path: $newDNPath" -ForegroundColor Yellow
