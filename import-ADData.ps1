@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.6j
+  Version: 0.7.7
  
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -211,7 +211,7 @@ process {
         return $exists
     }
 
-    # Convert old DistinguishedName to new DN, based on DNPrefix argument
+    # Convert old DistinguishedName to new DN
     function Get-NewDN {
         param (
             [string]$originalDN,
@@ -227,13 +227,14 @@ process {
             $relativeDN = $matches[1]
         } else {
             Write-Host "Warning: Could not parse DN for $originalDN, using original DN" -ForegroundColor Yellow
+            Write-Log "Get-NewDN : Could not parse DN for $originalDN, using original DN"
             $relativeDN = $originalDN
         }
 
-        return "$relativeDN,$DNPath"
+        return "${relativeDN},$DNPath"
     }
 
-    # Translate destination OU path from new object DN and DNPath
+    # Return translated parent path of the given object and create OUs if they don't exist
     function ConvertDNBase {
         param (
             [string]$oldDN,
@@ -254,11 +255,11 @@ process {
                 [array]::Reverse($ouList)
                 $previousOUBase = ""
 
+                # Create parent OUs from parent to child
                 foreach ($ou in $ouList) {
                     $ou = $ou.Trim()
                     Write-Log "debug :: processing ou = $ou"
                     $ouName = $ou -replace "^OU=", ""
-                    Write-Log "debug :: ouName = $ouName"
 
                     if ($previousOUBase) {
                         $currentOUBase = $previousOUBase
@@ -268,16 +269,14 @@ process {
 
                     Write-Log "debug :: currentOUBase = $currentOUBase"
 
-                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$currentOUBase'" -ErrorAction SilentlyContinue)) {
+                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
                         try {
                             if ($currentOUBase -eq $newDNPath) {
                                 New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                Write-Host "New-ADOrganizationalUnit -Name $ouName"
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName"
+                                Write-Log "New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion `$false"
                             } else {
                                 New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                Write-Host "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase"
+                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion `$false"
                             }
 
                             Write-Host "OU Created: ${ou},$currentOUBase"
@@ -286,6 +285,8 @@ process {
                             Write-Error "Failed to create OU ${ou},$currentOUBase"
                             Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                         }
+                    } else {
+                        Write-Log "OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
                     }
                     $previousOUBase = "OU=${ouName},$currentOUBase"
                 }
@@ -293,12 +294,13 @@ process {
             return $importTargetOU
         }
         elseif ($oldDN -match "^CN=.*?,CN=Users,DC=") {
-            $importTargetOU = "CN=Users," + ($newDNPath -replace "^.*?,(DC=.*$)", '$1')
+            $importTargetOU = "CN=Users," + ($newDNPath -replace '((?:,DC=[^,]+)+)$', '$1')
             Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
             return $importTargetOU
         }
         else {
             Write-Host "No OU found in DN: $oldDN. Assigning default path: $newDNPath" -ForegroundColor Yellow
+            Write-Log "No OU found in DN: $oldDN. Assigning default path: $newDNPath"
             return $newDNPath
         }
     }
@@ -350,7 +352,6 @@ process {
                             DisplayName       = $_.DisplayName
                             SamAccountName    = $sAMAccountName
                             Description       = $_.Description
-                            Path              = $ouPath -replace "CN=Users,(DC=.*$)", '$1'
                             UserPrincipalName = $newUserPrincipalName
                             GivenName         = $_.GivenName
                             Surname           = $_.Surname
@@ -358,7 +359,13 @@ process {
                         }
 
                         Try {
-                            New-ADUser @newUserParams -ErrorAction Stop
+                            if ($ouPath -match "^CN=Users,DC=") {
+                                New-ADUser @newUserParams -ErrorAction Stop
+                                Write-Log "New-ADUser `@newUserParams"
+                            } else {
+                                New-ADUser @newUserParams -Path $ouPath -ErrorAction Stop
+                                Write-Log "New-ADUser `@newUserParams -Path $ouPath"
+                            }
                         } Catch {
                             Write-Error "Failed to create user ${sAMAccountName}: $_"
                             Write-Log "Failed to create user: sAMAccountName=$sAMAccountName - $_"
@@ -366,9 +373,8 @@ process {
 
                         $createdUser = Get-ADUser -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
                         if ($createdUser) {
+                            Write-Host "User Created DistinguishedName=$($createdUser.DistinguishedName)"
                             Write-Log "User Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdUser.DistinguishedName)"
-                        } else {
-                            Write-Log "User Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
                         }
 
                         # Set additional properties using Set-ADUser
@@ -524,7 +530,6 @@ process {
                         Name           = $group.Name    # or $group.CN
                         SamAccountName = $sAMAccountName
                         Description    = $group.Description
-                        Path           = $ouPath
                         # ManagedBy    = $NewManagedBy   # produces error when DN missing on new AD
                         GroupCategory  = "Security" # modified later if necessary
                         GroupScope     = "Global"   # modified later if necessary
@@ -548,7 +553,13 @@ process {
                     }
 
                     Try {
-                        New-ADGroup @newGroupParams -ErrorAction Stop
+                        if ($ouPath -match "^CN=Users,DC=") {
+                            New-ADGroup @newGroupParams -ErrorAction Stop
+                            Write-Log "New-ADGroup `@newGroupParams"
+                        } else {
+                            New-ADGroup @newGroupParams -Path $ouPath -ErrorAction Stop
+                            Write-Log "New-ADGroup `@newGroupParams -Path $ouPath"
+                        }
                     } Catch {
                         Write-Error "Failed to create group ${sAMAccountName}: $_"
                         Write-Log "Failed to create group: sAMAccountName=$sAMAccountName - $_"
@@ -556,9 +567,8 @@ process {
 
                     $createdGroup = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
                     if ($createdGroup) {
+                        Write-Host "Group Created DistinguishedName=$($createdGroup.DistinguishedName)"
                         Write-Log "Group Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdGroup.DistinguishedName)"
-                    } else {
-                        Write-Log "Group Created: sAMAccountName=$sAMAccountName - (Failed to retrieve DN)"
                     }
 
                     # Add this group to parent groups
