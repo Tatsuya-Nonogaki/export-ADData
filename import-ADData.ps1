@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.8
+  Version: 0.7.8a
  
  .PARAMETER DNPrefix
   (Alias -d) Mandatory. Mutually exclusive with DNPath. 
@@ -245,6 +245,7 @@ process {
         # Obtain leading OU part
         $dnParts = $oldDN -split ","
         $ouParts = $dnParts | Where-Object { $_ -match "^OU=" }
+        $newDNPathHasOU = if ($newDNPath -match '^OU=') { $true }
 
         if ($ouParts) {
             $importTargetOU = "$($ouParts -join ","),$newDNPath"
@@ -264,14 +265,15 @@ process {
                     if ($previousOUBase) {
                         $currentOUBase = $previousOUBase
                     } else {
-                        $currentOUBase = $newDNPath
+                        # Remove preceding non-DC components from DNPath
+                        $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
                     }
 
                     Write-Log "debug :: currentOUBase = $currentOUBase"
 
                     if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
                         try {
-                            if ($currentOUBase -eq $newDNPath) {
+                            if (($currentOUBase -eq $newDNPath) -and -not $newDNPathHasOU) {
                                 New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
                                 Write-Log "New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion `$false"
                             } else {
@@ -294,7 +296,7 @@ process {
             return $importTargetOU
         }
         elseif ($oldDN -match "^CN=.*?,CN=Users,DC=") {
-            if ($newDNPath -match "^OU=") {
+            if ($newDNPathHasOU) {
                 # Place directly under the specified DNPath without intermediate CN=Users
                 $importTargetOU = $newDNPath
                 Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
@@ -312,7 +314,7 @@ process {
                         if ($previousOUBase) {
                             $currentOUBase = $previousOUBase
                         } else {
-                            $currentOUBase = $newDNPath
+                            $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
                         }
 
                         Write-Log "debug :: currentOUBase = $currentOUBase"
@@ -341,7 +343,7 @@ process {
                 }
                 return $importTargetOU
             } else {
-                $importTargetOU = "CN=Users," + ($newDNPath -replace '((?:,DC=[^,]+)+)$', '$1')
+                $importTargetOU = "CN=Users," + ($newDNPath -replace '^(OU=[^,]+,)*', '')
                 Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
                 return $importTargetOU
             }
