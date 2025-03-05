@@ -5,29 +5,29 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.7.8a
- 
- .PARAMETER DNPrefix
-  (Alias -d) Mandatory. Mutually exclusive with DNPath. 
-  Domain component into which you want import objects. 
-  For example: "unit.mydomain.local" which is converted to 
-  DistinguishedName(DNPath) "OU=unit,DC=mydomain,DC=local" internally.
-  IMPORTANT: Target DN structure must exist on the destination AD before import.
- 
- .PARAMETER DCDepth
-  Optional. Mutually exclusive with DNPath. 
-  In calculation of the DNPath, we assume the last 2 elements are DC 
-  per default. If it is not what you expect, specify depth count of 
-  DC with this. e.g., when -DNPath dept.unit.mydomain.local, then
-   DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
-   DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
-  -DCDepth 4: DNPath becomes DC=dept,DC=unit,DC=mydomain,DC=local
+  Version: 0.8.0
  
  .PARAMETER DNPath
-  (Alias -p) Optional. Mutually exclusive with DNPrefix and DCDepth. 
-  Instead of specifying DNPrefix (optionally with DCDepth), you can 
-  explicitly specify it in DistinguishedName format. This is preferable 
-  for accuracy, if you are familiar with DN expression of AD components.
+  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
+  Domain component into which you want import objects. Its argument must 
+  be in DistinguishedName form like "DC=mydomain,DC=com". This is 
+  much preferable than its alternative -DNPrefix (below) for accuracy.
+  IMPORTANT: Target DN structure must exist on the destination AD before 
+  import.
+ 
+ .PARAMETER DNPrefix
+  (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
+  Its argument must be in dotted format. For example: "unit.mydomain.local" 
+  which is converted internally to DistinguishedName(=DNPath) 
+  "OU=unit,DC=mydomain,DC=local".
+ 
+ .PARAMETER DCDepth
+  Optional. Can be used with -DNPrefix. Mutually exclusive with -DNPath. 
+  In calculation of the DNPath, we assume the last 2 elements are DC 
+  per default. If it is not what you expect, specify depth count of 
+  DC with this. e.g., when -DNPrefix dept.unit.mydomain.local, then
+   DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
+   DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
  
  .PARAMETER User
   (Alias -u) Operates in user import mode. If -UserFile (below)
@@ -52,11 +52,11 @@
  .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system object, 
   such as: Administrator(s), Domain Admins and COMPUTER$ and trusted 
-  DOMAIN$. This is usually dangerous and leads to AD system break down.
+  DOMAIN$. This is usually dangerous and leads to AD system breakdown.
  
  .PARAMETER NewUPNSuffix
-  Optional. New UserPrincipalName suffix to use for conversion. If not provided, 
-  script will convert UPN based on DNPath.
+  Optional. New UserPrincipalName suffix to use for conversion. If not 
+  provided, script will convert UPN based on DNPath.
 #>
 [CmdletBinding()]
 param(
@@ -211,7 +211,7 @@ process {
         return $exists
     }
 
-    # Convert old DistinguishedName to new DN
+    # Convert old object DistinguishedName to new DN
     function Get-NewDN {
         param (
             [string]$originalDN,
@@ -222,16 +222,19 @@ process {
             return ""
         }
 
-        # Get whole CN=,CN=.. portion, everything before OU or DC in other words
-        if ($originalDN -match "^(CN=[^,]+(?:,CN=[^,]+)*)") {
-            $relativeDN = $matches[1]
-        } else {
-            Write-Host "Warning: Could not parse DN for $originalDN, using original DN" -ForegroundColor Yellow
-            Write-Log "Get-NewDN : Could not parse DN for $originalDN, using original DN"
-            $relativeDN = $originalDN
+        if ($originalDN -match '^\s*(CN=[^,]+)') {
+            $cnPart = $matches[1]
         }
+        $ouPath = ConvertDNBase -oldDN $originalDN -newDNPath $DNPath
 
-        return "${relativeDN},$DNPath"
+        if ($cnPart) {
+            Write-Log "debug :: Get-NewDN : cnPart = $cnPart    ouPath = $ouPath"
+            Write-Log "debug :: Get-NewDN : return ${cnPart},$ouPath"
+            return "${cnPart},$ouPath"
+        } else {
+            Write-Log "Warning: Get-NewDN : originalDN has no CN part"
+            return $ouPath
+        }
     }
 
     # Return translated parent path of the given object and create OUs if they don't exist
