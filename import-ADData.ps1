@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports group and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.0
+  Version: 0.8.1a
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -60,6 +60,10 @@
   Optional. New UserPrincipalName suffix to use for conversion. If not 
   provided, script will convert UPN based on DNPath. It is usually not 
   necessary to specify.
+ 
+ .PARAMETER NoProtectNewOU
+  Optional. If specified, newly created OUs will not be protected from 
+  accidental deletion. By default, OUs will be created in protected state.
 #>
 [CmdletBinding()]
 param(
@@ -94,7 +98,10 @@ param(
     [switch]$IncludeSystemObject,
 
     [Parameter()]
-    [string]$NewUPNSuffix
+    [string]$NewUPNSuffix,
+
+    [Parameter()]
+    [switch]$NoProtectNewOU
 )
 
 begin {
@@ -109,6 +116,13 @@ begin {
         )
         $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         "$Timestamp - $Message" | Out-File -Append -FilePath $LogFilePath
+    }
+
+    # Determine protection option for new OUs
+    if ($NoProtectNewOU) {
+        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $false }
+    } else {
+        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $true }
     }
 
     # Arguments validation
@@ -231,7 +245,7 @@ process {
         $ouPath = ConvertDNBase -oldDN $originalDN -newDNPath $DNPath
 
         if ($cnPart) {
-            Write-Log "debug :: Get-NewDN : cnPart = $cnPart    ouPath = $ouPath"
+          # Write-Log "debug :: Get-NewDN : cnPart = $cnPart    ouPath = $ouPath"
             Write-Log "debug :: Get-NewDN : return ${cnPart},$ouPath"
             return "${cnPart},$ouPath"
         } else {
@@ -265,7 +279,7 @@ process {
                 # Create parent OUs from parent to child
                 foreach ($ou in $ouList) {
                     $ou = $ou.Trim()
-                    Write-Log "debug :: processing ou = $ou"
+                  # Write-Log "debug :: processing ou = $ou"
                     $ouName = $ou -replace "^OU=", ""
 
                     if ($previousOUBase) {
@@ -275,16 +289,16 @@ process {
                         $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
                     }
 
-                    Write-Log "debug :: currentOUBase = $currentOUBase"
+                  # Write-Log "debug :: currentOUBase = $currentOUBase"
 
                     if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
                         try {
                             if (($currentOUBase -eq $newDNPath) -and -not $newDNPathHasOU) {
-                                New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion `$false"
+                                New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
+                                Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
                             } else {
-                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion `$false"
+                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
+                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
                             }
 
                             Write-Host "OU Created: ${ou},$currentOUBase"
@@ -294,7 +308,7 @@ process {
                             Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                         }
                     } else {
-                        Write-Log "OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
+                        # Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
                     }
                     $previousOUBase = "OU=${ouName},$currentOUBase"
                 }
@@ -314,7 +328,7 @@ process {
 
                     foreach ($ou in $ouList) {
                         $ou = $ou.Trim()
-                        Write-Log "debug :: processing ou = $ou"
+                      # Write-Log "debug :: processing ou = $ou"
                         $ouName = $ou -replace "^OU=", ""
 
                         if ($previousOUBase) {
@@ -323,16 +337,16 @@ process {
                             $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
                         }
 
-                        Write-Log "debug :: currentOUBase = $currentOUBase"
+                      # Write-Log "debug :: currentOUBase = $currentOUBase"
 
                         if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
                             try {
                                 if ($currentOUBase -eq $newDNPath) {
-                                    New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -ProtectedFromAccidentalDeletion `$false"
+                                    New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
+                                    Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
                                 } else {
-                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion $false -ErrorAction Stop
-                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase -ProtectedFromAccidentalDeletion `$false"
+                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
+                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
                                 }
 
                                 Write-Host "OU Created: ${ou},$currentOUBase"
@@ -342,7 +356,7 @@ process {
                                 Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                             }
                         } else {
-                            Write-Log "OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
+                            # Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
                         }
                         $previousOUBase = "OU=${ouName},$currentOUBase"
                     }
@@ -393,6 +407,8 @@ process {
 
                     if (-not $userExists) {
                         # Construct parameters for New-ADUser
+                        Write-Host "Processing user sAMAccountName=`"$sAMAccountName`""
+                        Write-Log "Processing user sAMAccountName=`"$sAMAccountName`""
 
                         $ouPath = ConvertDNBase -oldDN $_.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
                         $managerDN = if ($_.Manager -ne "") { Get-NewDN -originalDN $_.Manager -DNPath $DNPath } else { $null }
@@ -578,6 +594,8 @@ process {
 
                 if (-not $groupExists) {
                     # Construct parameters for New-ADGroup
+                    Write-Host "Processing group sAMAccountName=`"$sAMAccountName`""
+                    Write-Log "Processing group sAMAccountName=`"$sAMAccountName`""
 
                     $ouPath = ConvertDNBase -oldDN $group.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
                     $NewManagedBy = Get-NewDN -originalDN $group.ManagedBy -DNPath $DNPath
