@@ -1,9 +1,9 @@
 <#
  .SYNOPSIS
-  Imports groups and users into Active Directory.
+  Imports users and groups into Active Directory.
  
  .DESCRIPTION
-  Imports groups and users into Active Directory from CSV files.
+  Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
   Version: 0.8.1b
  
