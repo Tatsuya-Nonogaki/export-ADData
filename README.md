@@ -8,7 +8,7 @@
 The intended usage is to export by specifying the domain basis, so that objects are output without losing their required attributes. When importing, three major strategies are expected;
 1. Export specifying "DC=domain,DC=local" and import to "DC=domain,DC=local": It is like backup and restore of AD users/groups.
 2. Export specifying "DC=olddomain,DC=local" and import to "DC=newdomain,DC=local": Allocate the users/groups onto a new domain basis, translating the domain naming, respecting hierarchies.
-3. Export specifying "DC=domain,DC=local" and import to "OU=osaka,DC=domain,DC=local": Whole migration from the domain basis to a new specific OU, along with all intermediate OUs. Secifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
+3. Export specifying "DC=domain,DC=local" and import to "OU=osaka,DC=domain,DC=local": Whole migration from the domain basis to a new specific OU, along with all intermediate OUs the users/groups depend on. Secifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
 
 ## Features
 ### Export-ADData
