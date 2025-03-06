@@ -1,11 +1,11 @@
 <#
  .SYNOPSIS
-  Imports group and users into Active Directory.
+  Imports groups and users into Active Directory.
  
  .DESCRIPTION
-  Imports group and users into Active Directory from CSV files.
+  Imports groups and users into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.1a
+  Version: 0.8.1b
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -214,7 +214,7 @@ process {
         param ([string]$DNPath)
 
         # Validate DNPath format
-        if ($DNPath -notmatch "^(CN|OU|DC)=[^,]+(,(CN|OU|DC)=[^,]+)*$") {
+        if ($DNPath -notmatch '^(CN|OU|DC)=[^,]+(,(CN|OU|DC)=[^,]+)*$') {
             Write-Error "Invalid DN format: $DNPath"
             return $false
         }
@@ -431,7 +431,7 @@ process {
                         }
 
                         Try {
-                            if ($ouPath -match "^CN=Users,DC=") {
+                            if ($ouPath -match '^CN=Users,DC=') {
                                 New-ADUser @newUserParams -ErrorAction Stop
                                 Write-Log "New-ADUser `@newUserParams"
                             } else {
@@ -627,7 +627,7 @@ process {
                     }
 
                     Try {
-                        if ($ouPath -match "^CN=Users,DC=") {
+                        if ($ouPath -match '^CN=Users,DC=') {
                             New-ADGroup @newGroupParams -ErrorAction Stop
                             Write-Log "New-ADGroup `@newGroupParams"
                         } else {
