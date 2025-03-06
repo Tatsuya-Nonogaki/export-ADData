@@ -9,11 +9,12 @@
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
-  Domain component into which you want import objects. Its argument must 
-  be in DistinguishedName form like "DC=mydomain,DC=com". This is 
-  much preferable than its alternative -DNPrefix (below) for accuracy.
-  IMPORTANT: Target DN structure must exist on the destination AD before 
-  import.
+  Destination base Domain component onto which you want import objects. 
+  Its argument must be in DistinguishedName form like "DC=mydomain,DC=com" 
+  or "OU=sales,DC=mydomain,DC=com". This parameter is much preferable than 
+  its alternative -DNPrefix (below) for accuracy.
+  IMPORTANT: The Target base DN object must exist on the destination AD 
+  before import.
  
  .PARAMETER DNPrefix
   (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
@@ -24,30 +25,31 @@
  .PARAMETER DCDepth
   Optional. Can be used with -DNPrefix. Mutually exclusive with -DNPath. 
   In calculation of the DNPath, we assume the last 2 elements are DC 
-  per default. If it is not what you expect, specify depth count of 
-  DC with this. e.g., when -DNPrefix dept.unit.mydomain.local, then
+  per default. If it is not what you expect, specify depth count of DC 
+  with this. e.g., when -DNPrefix dept.unit.mydomain.local, then
    DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
    DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
  
  .PARAMETER User
-  (Alias -u) Operates in user import mode. If -UserFile (below)
-  is specified, this switch is implied and can be omitted.
+  (Alias -u) Operates in user import mode. If -UserFile (below) is 
+  specified, this switch is implied and can be omitted.
  
  .PARAMETER UserFile
-  (Alias -uf) Optional. Path of input user CSV file. Path selection
-  dialog will ask you if omitted despite -User switch is set.
+  (Alias -uf) Optional. Path of input user CSV file. File selection
+  dialog will prompt you to choose, if omitted despite -User switch is set.
   Note: If you want to register password to any users, make a copy of 
   the whole CSV file, add "Password" column to it, which is missing from 
   the original, and put password in plain text. Password is required to 
-  set Enable flag of the account.
+  restore the "Enable" flag of the account.
  
  .PARAMETER Group
-  (Alias -g) Operates in group import mode. If -GroupFile (below)
-  is specified, this switch is implied and can be omitted.
+  (Alias -g) Operates in group import mode. If -GroupFile (below) is 
+  specified, this switch is implied and can be omitted.
  
  .PARAMETER GroupFile
-  (Alias -gf) Optional. Path of input group CSV file. Path selection
-  dialog will ask you if omitted despite -Group switch is set.
+  (Alias -gf) Optional. Path of input group CSV file. File selection
+  dialog will prompt you to choose, if omitted despite -Group switch 
+  is set.
  
  .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system object, 
@@ -56,7 +58,8 @@
  
  .PARAMETER NewUPNSuffix
   Optional. New UserPrincipalName suffix to use for conversion. If not 
-  provided, script will convert UPN based on DNPath.
+  provided, script will convert UPN based on DNPath. It is usually not 
+  necessary to specify.
 #>
 [CmdletBinding()]
 param(
