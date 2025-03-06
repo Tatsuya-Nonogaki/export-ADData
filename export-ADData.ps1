@@ -1,9 +1,9 @@
 <#
  .SYNOPSIS
-  Exports groups and users from Active Directory.
+  Exports users and groups from Active Directory.
  
  .DESCRIPTION
-  Exports groups and users from Active Directory to CSV files.
+  Exports users and groups from Active Directory to CSV files.
   Version: 0.7.11
  
  .PARAMETER DNPath
