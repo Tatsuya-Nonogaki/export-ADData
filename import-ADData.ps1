@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.1b
+  Version: 0.8.1c
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -383,13 +383,15 @@ process {
         )
 
         if ($objectClass -eq "user") {
+            $excludedUsers = @("SUPPORT_388945a0")
+
             Import-Csv -Path $filePath | 
               Where-Object {
                 # Exclude system user objects
                 if ($IncludeSystemObject) {
-                    return $true 
+                    return $true
                 } else {
-                    if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -match '\$$') {
+                    if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -match '\$$' -or $_.sAMAccountName -in $excludedUsers) {
                         Write-Host "Excluded System User: $($_.sAMAccountName)"
                         Write-Log "Excluded System User: sAMAccountName=$($_.sAMAccountName)"
                         return $false
@@ -693,6 +695,7 @@ process {
     }
 
     Write-Host "Target DN Path: $DNPath"
+    Write-Log "Target DN Path: $DNPath"
 
     # Group data import
     if ($Group -or $GroupFile) {
@@ -705,6 +708,7 @@ process {
             exit 1
         }
         Write-Host "Group File Path: $GroupFile"
+        Write-Log "Group File Path: $GroupFile"
         Import-ADObject -filePath $GroupFile -objectClass "group"
     }
 
@@ -719,6 +723,7 @@ process {
             exit 1
         }
         Write-Host "User File Path: $UserFile"
+        Write-Log "User File Path: $UserFile"
         Import-ADObject -filePath $UserFile -objectClass "user"
     }
 
