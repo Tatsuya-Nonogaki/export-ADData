@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.1c
+  Version: 0.8.2
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -415,21 +415,14 @@ process {
                         $ouPath = ConvertDNBase -oldDN $_.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
                         $managerDN = if ($_.Manager -ne "") { Get-NewDN -originalDN $_.Manager -DNPath $DNPath } else { $null }
 
-                        # Convert UserPrincipalName to new suffix
-                        $upnParts = $_.UserPrincipalName -split "@"
-                        $upnPrefix = $upnParts[0]
-                        $upnSuffix = if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) { $NewUPNSuffix } else { $DNPath -replace "OU=.*?,", "" -replace "DC=", "" -replace ",", "." }
-                        $newUserPrincipalName = "${upnPrefix}@${upnSuffix}"
-
                         $newUserParams = @{
-                            Name              = $_.Name
-                            DisplayName       = $_.DisplayName
-                            SamAccountName    = $sAMAccountName
-                            Description       = $_.Description
-                            UserPrincipalName = $newUserPrincipalName
-                            GivenName         = $_.GivenName
-                            Surname           = $_.Surname
-                            Manager           = $managerDN
+                            Name           = $_.Name
+                            DisplayName    = $_.DisplayName
+                            SamAccountName = $sAMAccountName
+                            Description    = $_.Description
+                            GivenName      = $_.GivenName
+                            Surname        = $_.Surname
+                            Manager        = $managerDN
                         }
 
                         Try {
@@ -453,23 +446,23 @@ process {
 
                         # Set additional properties using Set-ADUser
                         $additionalProperties = @{
-                            ProfilePath   = $_.ProfilePath
-                            ScriptPath    = $_.ScriptPath
-                            Company       = $_.Company
-                            Department    = $_.Department
-                            Title         = $_.Title
-                            Office        = $_.Office
-                            OfficePhone   = $_.OfficePhone
-                            EmailAddress  = $_.EmailAddress
-                            StreetAddress = $_.StreetAddress
-                            City          = $_.City
-                            State         = $_.State
-                            Country       = $_.Country
-                            PostalCode    = $_.PostalCode
-                            MobilePhone   = $_.MobilePhone
-                            HomePhone     = $_.HomePhone
-                            Fax           = $_.Fax
-                            Pager         = $_.Pager
+                            ProfilePath      = $_.ProfilePath
+                            ScriptPath       = $_.ScriptPath
+                            Company          = $_.Company
+                            Department       = $_.Department
+                            Title            = $_.Title
+                            Office           = $_.Office
+                            OfficePhone      = $_.OfficePhone
+                            EmailAddress     = $_.EmailAddress
+                            StreetAddress    = $_.StreetAddress
+                            City             = $_.City
+                            State            = $_.State
+                            Country          = $_.Country
+                            PostalCode       = $_.PostalCode
+                            MobilePhone      = $_.MobilePhone
+                            HomePhone        = $_.HomePhone
+                            Fax              = $_.Fax
+                            Pager            = $_.Pager
                         }
 
                         foreach ($property in $additionalProperties.Keys) {
@@ -486,6 +479,27 @@ process {
                                     Write-Host "Warning: Failed to set property $property for user ${sAMAccountName}" -ForegroundColor Yellow
                                     Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName - $_"
                                 }
+                            }
+                        }
+
+                        if ($_.UserPrincipalName -ne "") {
+                            # Convert UserPrincipalName to new suffix
+                            $upnParts = $_.UserPrincipalName -split "@"
+                            $upnPrefix = $upnParts[0]
+                            if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
+                                $upnSuffix =  $NewUPNSuffix
+                            } else {
+                                $upnSuffix = $DNPath -replace '^(OU=[^,]+,)*', '' -replace 'DC=', '' -replace ',', '.'
+                            }
+                            $newUserPrincipalName = "${upnPrefix}@${upnSuffix}"
+
+                            try {
+                                Set-ADUser -Identity $sAMAccountName -UserPrincipalName $newUserPrincipalName
+                                Write-Host "  => UserPrincipalName set for user: $sAMAccountName"
+                                Write-Log "UserPrincipalName `"$newUserPrincipalName`" set for user: sAMAccountName=$sAMAccountName"
+                            } catch {
+                                Write-Host "Warning: Failed to set UserPrincipalName for user ${sAMAccountName}" -ForegroundColor Yellow
+                                Write-Log "Failed to set UserPrincipalName `"$newUserPrincipalName`" for user: sAMAccountName=$sAMAccountName - $_"
                             }
                         }
 
@@ -513,7 +527,7 @@ process {
                             }
                             if ($userFlags -band 0x40) {                     # CannotChangePassword
                                 $user = Get-ADUser -Identity $sAMAccountName
-                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq [guid]"00299570-246d-11d0-a768-00aa006e0529" } })
+                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq [Guid]::Parse("4c164200-20c0-11d0-a768-00aa006e0529") -and $_.ActiveDirectoryRights -eq "ExtendedRight" -and $_.AccessControlType -eq "Deny" } })
                                 Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
                                 Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
                             }
