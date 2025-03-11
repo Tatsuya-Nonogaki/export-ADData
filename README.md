@@ -18,7 +18,7 @@ The intended usage is to export by specifying the domain basis, so that objects 
 - Import AD Users and Groups from CSV files.
 - Optionally include system objects during the import, if specified.
 - Handle `CN=Users` objects correctly and redirects them to a designated OU when needed.
-- Create missing OUs during the import.
+- Create missing intermediate OUs during the import.
 - Clear logging of import operations.
 - Option to disable "protection from accidental deletion" for newly created OUs, useful for pre-validation etc.
 
@@ -79,8 +79,8 @@ The intended usage is to export by specifying the domain basis, so that objects 
   argument must be in DistinguishedName form like "DC=mydomain,DC=local" 
   or "OU=sales,DC=mydomain,DC=local". This parameter is much preferable 
   than its alternative -DNPrefix (below) for accuracy.
-  IMPORTANT: The Target base DN object must exist on the destination AD 
-  before import.
+  IMPORTANT: The target base DN object, e.g. OU, must exist on the 
+  destination AD prior to import.
 
 .PARAMETER DNPrefix
   (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
