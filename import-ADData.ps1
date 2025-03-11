@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.3
+  Version: 0.8.4
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -266,7 +266,7 @@ process {
         }
     }
 
-    # Return translated parent path of the given object and create OUs if they don't exist
+    # Return translated parent path of the given object and create required OUs if not exist
     function ConvertDNBase {
         param (
             [string]$oldDN,
@@ -282,7 +282,7 @@ process {
         if ($ouParts) {
             $importTargetOU = "$($ouParts -join ","),$newDNPath"
 
-            Write-Log "debug :: importTargetOU = $importTargetOU"
+          # Write-Log "debug :: importTargetOU = $importTargetOU"
             if ($CreateOUIfNotExists) {
                 $ouList = $importTargetOU -split ",\s*" | Where-Object { $_ -match "^OU=" }
                 [array]::Reverse($ouList)
@@ -304,13 +304,14 @@ process {
                   # Write-Log "debug :: currentOUBase = $currentOUBase"
 
                     if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
+                        Write-Log "Creating required OU: ${ou},$currentOUBase"
                         try {
                             if (($currentOUBase -eq $newDNPath) -and -not $newDNPathHasOU) {
-                                New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
                                 Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
+                                New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
                             } else {
-                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
                                 Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
+                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
                             }
 
                             Write-Host "OU Created: ${ou},$currentOUBase"
@@ -319,9 +320,10 @@ process {
                             Write-Error "Failed to create OU ${ou},$currentOUBase"
                             Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                         }
-                    } else {
-                        # Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
                     }
+                   #else {
+                   #    Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
+                   #}
                     $previousOUBase = "OU=${ouName},$currentOUBase"
                 }
             }
@@ -346,19 +348,21 @@ process {
                         if ($previousOUBase) {
                             $currentOUBase = $previousOUBase
                         } else {
+                            # Remove preceding non-DC components from DNPath
                             $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
                         }
 
                       # Write-Log "debug :: currentOUBase = $currentOUBase"
 
                         if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
+                            Write-Log "Creating required OU: ${ou},$currentOUBase"
                             try {
                                 if ($currentOUBase -eq $newDNPath) {
-                                    New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
                                     Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
+                                    New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
                                 } else {
-                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
                                     Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
+                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
                                 }
 
                                 Write-Host "OU Created: ${ou},$currentOUBase"
@@ -367,9 +371,10 @@ process {
                                 Write-Error "Failed to create OU ${ou},$currentOUBase"
                                 Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
                             }
-                        } else {
-                            # Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
                         }
+                       #else {
+                       #    Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
+                       #}
                         $previousOUBase = "OU=${ouName},$currentOUBase"
                     }
                 }
