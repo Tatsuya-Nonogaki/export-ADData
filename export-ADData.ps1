@@ -4,13 +4,13 @@
  
  .DESCRIPTION
   Exports users and groups from Active Directory to CSV files.
-  Version: 0.7.11
+  Version: 0.7.12
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
-  Domain component from which you want to retrieve objects. 
-  Its argument must be in DistinguishedName form like "DC=mydomain,DC=com" 
-  or "OU=sales,DC=mydomain,DC=com". This parameter is much preferable than 
+  Base of the Domain hierarchy from which you want to retrieve objects. Its 
+  argument must be in DistinguishedName form like "DC=mydomain,DC=local" or 
+  "OU=sales,DC=mydomain,DC=local". This parameter is much preferable than 
   its alternative -DNPrefix (below) for accuracy.
  
  .PARAMETER DNPrefix
@@ -30,6 +30,14 @@
  .PARAMETER OutPath
   (Alias -o) Optional. Folder path where you want to save output CSV files.
   Path selection dialog will prompt you to choose, if omitted.
+ 
+ .EXAMPLE
+   # Export AD Users and Groups from the Domain basis to CSV files in "C:\ADExport"
+   .\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -OutPath "C:\ADExport"
+ 
+ .EXAMPLE
+   # (Not recommended) Export AD Users and Groups, specifying a specific hierarchy base.
+   .\export-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -OutPath "C:\ADExport"
 #>
 [CmdletBinding()]
 param(
