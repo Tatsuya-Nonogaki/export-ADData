@@ -13,8 +13,8 @@
   argument must be in DistinguishedName form like "DC=mydomain,DC=local" 
   or "OU=sales,DC=mydomain,DC=local". This parameter is much preferable 
   than its alternative -DNPrefix (below) for accuracy.
-  IMPORTANT: The Target base DN object must exist on the destination AD 
-  before import.
+  IMPORTANT: The target base DN object, e.g. OU, must exist on the 
+  destination AD before import.
  
  .PARAMETER DNPrefix
   (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
