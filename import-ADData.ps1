@@ -14,7 +14,7 @@
   or "OU=sales,DC=mydomain,DC=local". This parameter is much preferable 
   than its alternative -DNPrefix (below) for accuracy.
   IMPORTANT: The target base DN object, e.g. OU, must exist on the 
-  destination AD before import.
+  destination AD prior to import.
  
  .PARAMETER DNPrefix
   (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
