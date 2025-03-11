@@ -5,14 +5,14 @@
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.2
+  Version: 0.8.3
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
-  Destination base Domain component onto which you want import objects. 
-  Its argument must be in DistinguishedName form like "DC=mydomain,DC=com" 
-  or "OU=sales,DC=mydomain,DC=com". This parameter is much preferable than 
-  its alternative -DNPrefix (below) for accuracy.
+  Base of the Domain hierarchy onto which you want import objects. Its 
+  argument must be in DistinguishedName form like "DC=mydomain,DC=local" 
+  or "OU=sales,DC=mydomain,DC=local". This parameter is much preferable 
+  than its alternative -DNPrefix (below) for accuracy.
   IMPORTANT: The Target base DN object must exist on the destination AD 
   before import.
  
@@ -26,7 +26,7 @@
   Optional. Can be used with -DNPrefix. Mutually exclusive with -DNPath. 
   In calculation of the DNPath, we assume the last 2 elements are DC 
   per default. If it is not what you expect, specify depth count of DC 
-  with this. e.g., when -DNPrefix dept.unit.mydomain.local, then
+  with this. e.g., when -DNPrefix dept.unit.mydomain.local, then 
    DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
    DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
  
@@ -35,7 +35,7 @@
   specified, this switch is implied and can be omitted.
  
  .PARAMETER UserFile
-  (Alias -uf) Optional. Path of input user CSV file. File selection
+  (Alias -uf) Optional. Path of input user CSV file. File selection 
   dialog will prompt you to choose, if omitted despite -User switch is set.
   Note: If you want to register password to any users, make a copy of 
   the whole CSV file, add "Password" column to it, which is missing from 
@@ -47,7 +47,7 @@
   specified, this switch is implied and can be omitted.
  
  .PARAMETER GroupFile
-  (Alias -gf) Optional. Path of input group CSV file. File selection
+  (Alias -gf) Optional. Path of input group CSV file. File selection 
   dialog will prompt you to choose, if omitted despite -Group switch 
   is set.
  
@@ -64,6 +64,18 @@
  .PARAMETER NoProtectNewOU
   Optional. If specified, newly created OUs will not be protected from 
   accidental deletion. By default, OUs will be created in protected state.
+  
+ .EXAMPLE
+  # Import AD Groups from CSV to a new Domain basis, excluding system objects
+  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile "C:\ADExport\Groups_mydomain_local.csv"
+ 
+ .EXAMPLE
+  # Import AD Users from CSV to an OU on a Domain. A file selection dialog will pop-up to let you choose CSV.
+  .\import-ADData.ps1 -DNPath "OU=unit,DC=newdomain,DC=local" -User
+ 
+ .EXAMPLE
+  # Import AD Users and Groups at a time. Internally, users are processed after the whole groups, but this is not recommended because of potential massive errors due to group/user to groups membership dependency violation when any of groups were not successfully created.
+  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "C:\ADExport\Users_mydomain_local.csv" -GroupFile "C:\ADExport\Groups_mydomain_local.csv"
 #>
 [CmdletBinding()]
 param(
