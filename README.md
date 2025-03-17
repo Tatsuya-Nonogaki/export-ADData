@@ -10,6 +10,8 @@ The intended usage is to export by specifying the domain basis, so that objects 
 2. Export specifying "DC=olddomain,DC=local" and import to "DC=newdomain,DC=local": Allocate the users/groups onto a new domain basis, translating the domain naming, respecting hierarchies.
 3. Export specifying "DC=domain,DC=local" and import to "OU=osaka,DC=domain,DC=local": Whole migration from the domain basis to a new specific OU, along with all intermediate OUs the users/groups depend on. Secifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
 
+`Compare-ADCSV.ps1` is one more additional PowerShell script designed to compare two CSVs of users or groups exported from Active Directory. This is useful for verifying before and after the import.
+
 ## Features
 ### Export-ADData
 - Export AD Users and Groups to a pair of CSV files.
@@ -21,6 +23,12 @@ The intended usage is to export by specifying the domain basis, so that objects 
 - Create missing intermediate OUs during the import.
 - Clear logging of import operations.
 - Option to disable "protection from accidental deletion" for newly created OUs, useful for pre-validation etc.
+
+### Compare-ADCSV
+- Compare two CSV files of AD users or groups.
+- Comparison is done with sAMAccountName as the key.
+- Show difference of DistinguishedName, or absence on one side.
+- Output a CSV file or to the PS console.
 
 ## Prerequisites
 - PowerShell
@@ -130,6 +138,27 @@ The intended usage is to export by specifying the domain basis, so that objects 
 .PARAMETER NoProtectNewOU
   Optional. If specified, newly created OUs will not be protected from 
   accidental deletion. By default, OUs will be created in protected state.
+```
+
+### Compare-ADCSV
+
+```powershell
+.SYNOPSIS
+  Compare two CSVs of users or groups exported from Active Directory.
+ 
+.DESCRIPTION
+  Compare two CSVs of users or groups exported from Active Directory, 
+  with sAMAccountName as the key.
+ 
+.PARAMETER OldFile
+  (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute path.
+ 
+.PARAMETER OldFile
+  (Alias -n) Mandatory. New CSV file, with relative or absolute path.
+ 
+.PARAMETER OutFile
+  Optional. Path to a CSV file for the output. If not specified, output 
+  is written only to the PS console.
 ```
 
 ## Examples
