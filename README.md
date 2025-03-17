@@ -28,6 +28,7 @@ The intended usage is to export by specifying the domain basis, so that objects 
 - Compare two CSV files of AD users or groups.
 - Comparison is done with sAMAccountName as the key.
 - Show difference of DistinguishedName, or absence on one side.
+- Optionally output also entries with no difference. 
 - Output a CSV file or to the PS console.
 
 ## Prerequisites
@@ -145,20 +146,24 @@ The intended usage is to export by specifying the domain basis, so that objects 
 ```powershell
 .SYNOPSIS
   Compare two CSVs of users or groups exported from Active Directory.
- 
+
 .DESCRIPTION
   Compare two CSVs of users or groups exported from Active Directory, 
   with sAMAccountName as the key.
- 
+
 .PARAMETER OldFile
-  (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute path.
- 
+  (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute 
+  path.
+
 .PARAMETER OldFile
   (Alias -n) Mandatory. New CSV file, with relative or absolute path.
- 
+
 .PARAMETER OutFile
   Optional. Path to a CSV file for the output. If not specified, output 
   is written only to the PS console.
+
+.PARAMETER IncludeEqual
+  Optional. Include entries with no difference in the output.
 ```
 
 ## Examples
