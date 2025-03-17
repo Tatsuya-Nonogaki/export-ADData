@@ -5,7 +5,7 @@
  .DESCRIPTION
   Compare two CSVs of users or groups exported from Active Directory, 
   with sAMAccountName as the key.
-  Version: 0.1.2
+  Version: 0.1.3
  
  .PARAMETER OldFile
   (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute path.
@@ -16,6 +16,9 @@
  .PARAMETER OutFile
   Optional. Path to a CSV file for the output. If not specified, output 
   is written only to the PS console.
+ 
+ .PARAMETER IncludeEqual
+  Optional. Include entries with no difference in the output.
 #>
 [CmdletBinding()]
 param(
@@ -28,7 +31,10 @@ param(
     [string]$NewFile,
 
     [Parameter(Position=2)]
-    [string]$OutFile
+    [string]$OutFile,
+
+    [Parameter()]
+    [switch]$IncludeEqual
 )
 
 $oldUsers = Import-Csv -Path $OldFile
@@ -60,6 +66,15 @@ foreach ($oldUser in $oldUsers) {
                 OldDistinguishedName = $oldDN
                 NewDistinguishedName = $newDN
                 DifferencePoints    = $differencePoints -join "; "
+            }
+            $comparisonResults += $comparisonResult
+        }
+        elseif ($IncludeEqual) {
+            $comparisonResult = [PSCustomObject]@{
+                sAMAccountName     = $sAMAccountName
+                OldDistinguishedName = $oldDN
+                NewDistinguishedName = $newDN
+                DifferencePoints    = ""
             }
             $comparisonResults += $comparisonResult
         }
