@@ -27,7 +27,8 @@ The intended usage is to export by specifying the domain basis, so that objects 
 ### Compare-ADCSV
 - Compare two CSV files of AD users or groups.
 - Comparison is done with sAMAccountName as the key.
-- Show difference of DistinguishedName, or absence on one side.
+- Show difference of DistinguishedName, or entry absence on one side.
+- `Enabled` and `PasswordNeverExpires` properties of users are also verified.
 - Optionally output also entries with no difference. 
 - Output a CSV file or to the PS console.
 
@@ -155,7 +156,7 @@ The intended usage is to export by specifying the domain basis, so that objects 
   (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute 
   path.
 
-.PARAMETER OldFile
+.PARAMETER NewFile
   (Alias -n) Mandatory. New CSV file, with relative or absolute path.
 
 .PARAMETER OutFile
