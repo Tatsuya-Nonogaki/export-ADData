@@ -12,6 +12,8 @@ The intended usage is to export by specifying the domain basis, so that objects 
 
 `Compare-ADCSV.ps1` is one more additional PowerShell script designed to compare two CSVs of users or groups exported from Active Directory. This is useful for verifying before and after the import.
 
+`Check-ADUserPassword.ps1` is a tiny utility to check whether the user's password is set as expected.
+
 ## Features
 ### Export-ADData
 - Export AD Users and Groups to a pair of CSV files.
@@ -31,6 +33,10 @@ The intended usage is to export by specifying the domain basis, so that objects 
 - `Enabled` and `PasswordNeverExpires` properties of users are also verified.
 - Optionally output also entries with no difference. 
 - Output a CSV file or to the PS console.
+
+### Check-ADUserPassword
+- Checks whether the user's password is set as expected by querying the AD.
+- Domain can be preset in the script itself to save labor on frequent runs.
 
 ## Prerequisites
 - PowerShell
@@ -165,6 +171,30 @@ The intended usage is to export by specifying the domain basis, so that objects 
 
 .PARAMETER IncludeEqual
   Optional. Include entries with no difference in the output.
+```
+
+### Check-ADUserPassword
+
+```powershell
+.SYNOPSIS
+  Check whether the user's password is set as expected.
+
+.DESCRIPTION
+  Checks whether the user's password is set as expected by querying the AD. 
+  You can preset Domain in the script itself to save labor when running the 
+  script repeatedly.
+
+.PARAMETER UserName
+  (Alias -u) The user whose password is to be validated. Mandatory but 
+  PowerShell will prompt you if omitted.
+
+.PARAMETER Password
+  (Alias -p) The passowrd string in plain text. Mandatory but PowerShell 
+  will prompt you if omitted, which is recommended for security.
+
+.PARAMETER Domain
+  (Alias -d) Optional. The AD Domain to query. The preset Domain is used if 
+  omitted.
 ```
 
 ## Examples
