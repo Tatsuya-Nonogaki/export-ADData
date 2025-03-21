@@ -10,9 +10,9 @@ The intended usage is to export by specifying the domain basis, so that objects 
 2. Export specifying "DC=olddomain,DC=local" and import to "DC=newdomain,DC=local": Allocate the users/groups onto a new domain basis, translating the domain naming, respecting hierarchies.
 3. Export specifying "DC=domain,DC=local" and import to "OU=osaka,DC=domain,DC=local": Whole migration from the domain basis to a new specific OU, along with all intermediate OUs the users/groups depend on. In this case, users under CN=Users container are created just under OU=osaka because it is impossible to create "Users" container nor OU=Users under the OU. Secifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
 
-`Compare-ADCSV.ps1` is one more additional PowerShell script designed to compare two CSVs of users or groups exported from Active Directory. This is useful for verifying before and after the import.
+`Compare-ADCSV` is one more additional PowerShell script designed to compare two CSVs of users or groups exported from Active Directory. This is useful for verifying before and after the import.
 
-`Check-ADUserPassword.ps1` is a tiny utility to check whether the user's password is set as expected.
+`Check-ADUserPassword` is a tiny utility to check whether the user's password is set as expected.
 
 ## Features
 ### Export-ADData
