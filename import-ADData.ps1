@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.4
+  Version: 0.8.5
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -40,7 +40,7 @@
   Note: If you want to register password to any users, make a copy of 
   the whole CSV file, add "Password" column to it, which is missing from 
   the original, and put password in plain text. Password is required to 
-  restore the "Enable" flag of the account.
+  restore the "Enabled" flag of the account.
  
  .PARAMETER Group
   (Alias -g) Operates in group import mode. If -GroupFile (below) is 
