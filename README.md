@@ -17,6 +17,7 @@ The intended usage is to export by specifying the domain basis, so that objects 
 ## Features
 ### Export-ADData
 - Export AD Users and Groups to a pair of CSV files.
+- Possible to exclude system objects from output.
 
 ### Import-ADData
 - Import AD Users and Groups from CSV files.
