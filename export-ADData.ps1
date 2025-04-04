@@ -63,7 +63,6 @@ param(
     [Parameter()]
     [Alias("nosys")]
     [switch]$ExcludeSystemObject
-
 )
 
 begin {
