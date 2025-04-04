@@ -77,6 +77,10 @@ The intended usage is to export by specifying the domain basis, so that objects 
 .PARAMETER OutPath
   (Alias -o) Optional. Folder path where you want to save output CSV files.
   Path selection dialog will prompt you to choose, if omitted.
+
+.PARAMETER ExcludeSystemObject
+  (Alias -nosys) Optional. Exclude System objects such as 'Administrator(s)', 
+  'Guest(s)', 'Domain Users' and trusted 'DOMAIN$'.
 ```
 
 ### Import-ADData
