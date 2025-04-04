@@ -4,7 +4,7 @@
  
  .DESCRIPTION
   Exports users and groups from Active Directory to CSV files.
-  Version: 0.7.12
+  Version: 0.7.13
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -31,6 +31,10 @@
   (Alias -o) Optional. Folder path where you want to save output CSV files.
   Path selection dialog will prompt you to choose, if omitted.
  
+ .PARAMETER ExcludeSystemObject
+  (Alias -nosys) Optional. Exclude System objects such as 'Administrator(s)', 
+  'Guest(s)', 'Domain Users' and trusted 'DOMAIN$'.
+ 
  .EXAMPLE
    # Export AD Users and Groups from the Domain basis to CSV files in "C:\ADExport"
    .\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -OutPath "C:\ADExport"
@@ -54,7 +58,12 @@ param(
 
     [Parameter()]
     [Alias("o")]
-    [string]$OutPath
+    [string]$OutPath,
+
+    [Parameter()]
+    [Alias("nosys")]
+    [switch]$ExcludeSystemObject
+
 )
 
 begin {
@@ -210,22 +219,56 @@ process {
     write-host "User Output File Path = $userOutputFilePath"
     write-host "Group Output File Path = $groupOutputFilePath"
 
+    # Export Users
     # Additional user properties we want to include in output
     $userExtraProps = "MemberOf", "EmailAddress", "HomePhone", "MobilePhone", "OfficePhone", "Title", "Department", "Manager", "LockedOut", "*"
 
-    # Store Manager property value as a DistinguishedName so that it can be easily given to import script
+    # Specific system user objects to exclude
+    $excludedUsers = @("SUPPORT_388945a0")
+
     Get-ADUser -Filter * -Properties $userExtraProps -SearchBase "$DNPath" | 
+      Where-Object {
+        if ($ExcludeSystemObject) {
+            if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -match '\$$' -or $_.sAMAccountName -in $excludedUsers) {
+                Write-Host "Excluded System User: $($_.sAMAccountName)"
+                return $false
+            } else {
+                return $true
+            }
+        } else {
+            return $true
+        }
+      } | 
       Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, `
                     @{Name="Manager"; Expression={ if ($_.Manager) { (Get-ADUser -Identity $_.Manager).DistinguishedName } else { $null } }}, `
                     * -ExcludeProperty MemberOf, Manager | 
         Export-Csv -Path $userOutputFilePath -Encoding UTF8 -NoTypeInformation
 
+    # Export Groups
     # Additional group properties we want to include in output
     $groupExtraProps = "MemberOf", "ManagedBy", "*"
 
+    # Specific system group objects to exclude
+    $excludedGroups = @("DnsAdmins", "DnsUpdateProxy", "HelpServicesGroup", "TelnetClients", "WINS Users",
+                        "Administrators", "Domain Admins", "Enterprise Admins", "Schema Admins",
+                        "Account Operators", "Server Operators", "Backup Operators", "Print Operators",
+                        "Replicator", "Cert Publishers")
+
     Get-ADGroup -Filter * -Properties $groupExtraProps -SearchBase "$DNPath" | 
-     Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf |
-      Export-Csv -Path $groupOutputFilePath -Encoding UTF8 -NoTypeInformation
+      Where-Object {
+        if ($ExcludeSystemObject) {
+            if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -in $excludedGroups) {
+                Write-Host "Excluded System Group: $($_.sAMAccountName)"
+                return $false
+            } else {
+                return $true
+            }
+        } else {
+            return $true 
+        }
+      } | 
+      Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf |
+        Export-Csv -Path $groupOutputFilePath -Encoding UTF8 -NoTypeInformation
 
 # End of process
 }
