@@ -5,7 +5,7 @@
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
   You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.5
+  Version: 0.8.6
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -53,8 +53,8 @@
  
  .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system object, 
-  such as: Administrator(s), Domain Admins and COMPUTER$ and trusted 
-  DOMAIN$. This is usually dangerous and leads to AD system breakdown.
+  such as: Administrator(s), Domain Admins and trusted DOMAIN$. This is 
+  usually dangerous and leads to AD system breakdown.
  
  .PARAMETER NewUPNSuffix
   Optional. New UserPrincipalName suffix to use for conversion. If not 

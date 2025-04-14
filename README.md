@@ -25,7 +25,7 @@ The intended usage is to export by specifying the domain basis, so that objects 
 - Handle objects in `CN=Users` container specially and appropriately, redirect them to a designated OU when needed.
 - Create missing intermediate OUs during the import.
 - Detailed logging of import operations.
-- Option to disable "protection from accidental deletion" for newly created OUs, useful for pre-validation etc.
+- Option to disable "protect from accidental deletion" for newly created OUs, useful for pre-validation etc.
 
 ### Compare-ADCSV
 - Compare two CSV files of AD users or groups.
@@ -140,8 +140,8 @@ The intended usage is to export by specifying the domain basis, so that objects 
 
 .PARAMETER IncludeSystemObject
   Optional. Import also users and groups which are critical system object, 
-  such as: Administrator(s), Domain Admins and COMPUTER$ and trusted 
-  DOMAIN$. This is usually dangerous and leads to AD system breakdown.
+  such as: Administrator(s), Domain Admins and trusted DOMAIN$. This is 
+  usually dangerous and leads to AD system breakdown.
 
 .PARAMETER NewUPNSuffix
   Optional. New UserPrincipalName suffix to use for conversion. If not 
