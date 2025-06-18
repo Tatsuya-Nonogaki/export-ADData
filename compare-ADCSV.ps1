@@ -5,7 +5,7 @@
  .DESCRIPTION
   Compare two CSVs of users or groups exported from Active Directory, 
   with sAMAccountName as the key.
-  Version: 0.1.4
+  Version: 0.2.0
  
  .PARAMETER OldFile
   (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute path.
@@ -42,7 +42,7 @@ $newUsers = Import-Csv -Path $NewFile
 
 $comparisonResults = @()
 
-# Determine if the CSVs are user exports by checking for user-specific properties
+# Detect user vs group export
 $isUserExport = $false
 if ($oldUsers[0].PSObject.Properties.Name -contains 'ObjectClass') {
     $isUserExport = $oldUsers[0].ObjectClass -eq 'user'
@@ -60,6 +60,7 @@ foreach ($oldUser in $oldUsers) {
         $oldDN = $oldUser.DistinguishedName
         $newDN = $newUser.DistinguishedName
 
+        # DistinguishedName diff
         $differencePoints = Compare-Object -ReferenceObject ($oldDN -split ',') -DifferenceObject ($newDN -split ',') | ForEach-Object {
             if ($_.SideIndicator -eq '<=') {
                 "--- $($_.InputObject)"
@@ -68,80 +69,74 @@ foreach ($oldUser in $oldUsers) {
             }
         }
 
+        # MemberOf diff
+        $removed = @()
+        $added = @()
+        $diffs = @()
+        $oldMemberOf = $oldUser.MemberOf
+        $newMemberOf = $newUser.MemberOf
+        $memberOfDiff = ""
+        if ($null -ne $oldMemberOf -or $null -ne $newMemberOf) {
+            $oldSet = @()
+            $newSet = @()
+            if ($null -ne $oldMemberOf -and $oldMemberOf -ne "") {
+                $oldSet = $oldMemberOf -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" } | Sort-Object { $_.ToLower() }
+            }
+            if ($null -ne $newMemberOf -and $newMemberOf -ne "") {
+                $newSet = $newMemberOf -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" } | Sort-Object { $_.ToLower() }
+            }
+            $removed = @(Compare-Object -ReferenceObject $oldSet -DifferenceObject $newSet | Where-Object { $_.SideIndicator -eq '<=' } | ForEach-Object { "--- $($_.InputObject)" })
+            $added   = @(Compare-Object -ReferenceObject $oldSet -DifferenceObject $newSet | Where-Object { $_.SideIndicator -eq '=>' } | ForEach-Object { "+++ $($_.InputObject)" })
+            $diffs = $removed + $added
+            $memberOfDiff = $diffs -join '; '
+        }
+
         $comparisonResult = [PSCustomObject]@{
-            sAMAccountName     = $sAMAccountName
-            OldDistinguishedName = $oldDN
-            NewDistinguishedName = $newDN
-            DifferencePoints    = $differencePoints -join "; "
+            sAMAccountName        = $sAMAccountName
+            OldDistinguishedName  = $oldDN
+            NewDistinguishedName  = $newDN
+            DifferencePoints      = $differencePoints -join "; "
+            MemberOfDiff          = $memberOfDiff
         }
 
+        # Additional user properties
         if ($isUserExport) {
-            $oldEnabled = if ($oldUser.PSObject.Properties.Name -contains 'Enabled') { $oldUser.Enabled } else { "" }
-            $newEnabled = if ($newUser.PSObject.Properties.Name -contains 'Enabled') { $newUser.Enabled } else { "" }
-            $oldPasswordNeverExpires = if ($oldUser.PSObject.Properties.Name -contains 'PasswordNeverExpires') { $oldUser.PasswordNeverExpires } else { "" }
-            $newPasswordNeverExpires = if ($newUser.PSObject.Properties.Name -contains 'PasswordNeverExpires') { $newUser.PasswordNeverExpires } else { "" }
-
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldEnabled -Value $oldEnabled
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewEnabled -Value $newEnabled
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldPasswordNeverExpires -Value $oldPasswordNeverExpires
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewPasswordNeverExpires -Value $newPasswordNeverExpires
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldEnabled -Value ($oldUser.Enabled)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewEnabled -Value ($newUser.Enabled)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldPasswordNeverExpires -Value ($oldUser.PasswordNeverExpires)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewPasswordNeverExpires -Value ($newUser.PasswordNeverExpires)
         }
 
-        if ($comparisonResult.DifferencePoints -or ($isUserExport -and ($comparisonResult.OldEnabled -ne $comparisonResult.NewEnabled -or $comparisonResult.OldPasswordNeverExpires -ne $comparisonResult.NewPasswordNeverExpires)) -or $IncludeEqual) {
+        # Output logic
+        $anyDiff = $comparisonResult.DifferencePoints -or $comparisonResult.MemberOfDiff
+        if ($isUserExport) {
+            $anyDiff = $anyDiff -or ($comparisonResult.OldEnabled -ne $comparisonResult.NewEnabled) -or ($comparisonResult.OldPasswordNeverExpires -ne $comparisonResult.NewPasswordNeverExpires)
+        }
+        if ($anyDiff -or $IncludeEqual) {
             $comparisonResults += $comparisonResult
         }
+
+        $newUsersHashTable.Remove($sAMAccountName)
     } else {
-        # Entries present in old file but missing in new file
-        $comparisonResult = [PSCustomObject]@{
-            sAMAccountName     = $sAMAccountName
-            OldDistinguishedName = $oldUser.DistinguishedName
-            NewDistinguishedName = "MISSING"
-            DifferencePoints    = "Entry missing in new CSV"
+        # Deleted in new
+        $comparisonResults += [PSCustomObject]@{
+            sAMAccountName        = $sAMAccountName
+            OldDistinguishedName  = $oldUser.DistinguishedName
+            NewDistinguishedName  = ""
+            DifferencePoints      = "--- Missing in new"
+            MemberOfDiff          = ""
         }
-
-        if ($isUserExport) {
-            $oldEnabled = if ($oldUser.PSObject.Properties.Name -contains 'Enabled') { $oldUser.Enabled } else { "" }
-            $newEnabled = ""
-            $oldPasswordNeverExpires = if ($oldUser.PSObject.Properties.Name -contains 'PasswordNeverExpires') { $oldUser.PasswordNeverExpires } else { "" }
-            $newPasswordNeverExpires = ""
-
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldEnabled -Value $oldEnabled
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewEnabled -Value $newEnabled
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldPasswordNeverExpires -Value $oldPasswordNeverExpires
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewPasswordNeverExpires -Value $newPasswordNeverExpires
-        }
-
-        $comparisonResults += $comparisonResult
     }
 }
 
-# Check for entries present in new file but missing in old file
-$oldUsersHashTable = @{}
-$oldUsers | ForEach-Object { $oldUsersHashTable[$_.sAMAccountName] = $_ }
-
-foreach ($newUser in $newUsers) {
-    $sAMAccountName = $newUser.sAMAccountName
-    if (-not $oldUsersHashTable.ContainsKey($sAMAccountName)) {
-        $comparisonResult = [PSCustomObject]@{
-            sAMAccountName     = $sAMAccountName
-            OldDistinguishedName = "MISSING"
-            NewDistinguishedName = $newUser.DistinguishedName
-            DifferencePoints    = "Entry missing in old CSV"
-        }
-
-        if ($isUserExport) {
-            $oldEnabled = ""
-            $newEnabled = if ($newUser.PSObject.Properties.Name -contains 'Enabled') { $newUser.Enabled } else { "" }
-            $oldPasswordNeverExpires = ""
-            $newPasswordNeverExpires = if ($newUser.PSObject.Properties.Name -contains 'PasswordNeverExpires') { $newUser.PasswordNeverExpires } else { "" }
-
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldEnabled -Value $oldEnabled
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewEnabled -Value $newEnabled
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldPasswordNeverExpires -Value $oldPasswordNeverExpires
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewPasswordNeverExpires -Value $newPasswordNeverExpires
-        }
-
-        $comparisonResults += $comparisonResult
+# Added in new
+foreach ($newUser in $newUsersHashTable.Values) {
+    $comparisonResults += [PSCustomObject]@{
+        sAMAccountName        = $newUser.sAMAccountName
+        OldDistinguishedName  = ""
+        NewDistinguishedName  = $newUser.DistinguishedName
+        DifferencePoints      = "+++ New in new"
+        MemberOfDiff          = ""
     }
 }
 
