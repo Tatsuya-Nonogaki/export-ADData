@@ -5,7 +5,7 @@
  .DESCRIPTION
   Compare two CSVs of users or groups exported from Active Directory, 
   with sAMAccountName as the key.
-  Version: 0.2.0
+  Version: 0.2.1
  
  .PARAMETER OldFile
   (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute path.
@@ -37,28 +37,28 @@ param(
     [switch]$IncludeEqual
 )
 
-$oldUsers = Import-Csv -Path $OldFile
-$newUsers = Import-Csv -Path $NewFile
+$oldRecords = Import-Csv -Path $OldFile
+$newRecords = Import-Csv -Path $NewFile
 
 $comparisonResults = @()
 
 # Detect user vs group export
 $isUserExport = $false
-if ($oldUsers[0].PSObject.Properties.Name -contains 'ObjectClass') {
-    $isUserExport = $oldUsers[0].ObjectClass -eq 'user'
+if ($oldRecords[0].PSObject.Properties.Name -contains 'ObjectClass') {
+    $isUserExport = $oldRecords[0].ObjectClass -eq 'user'
 } else {
-    $isUserExport = $oldUsers[0].PSObject.Properties.Name -contains 'GivenName' -or $oldUsers[0].PSObject.Properties.Name -contains 'Surname' -or $oldUsers[0].PSObject.Properties.Name -contains 'UserPrincipalName'
+    $isUserExport = $oldRecords[0].PSObject.Properties.Name -contains 'GivenName' -or $oldRecords[0].PSObject.Properties.Name -contains 'Surname' -or $oldRecords[0].PSObject.Properties.Name -contains 'UserPrincipalName'
 }
 
-$newUsersHashTable = @{}
-$newUsers | ForEach-Object { $newUsersHashTable[$_.sAMAccountName] = $_ }
+$newRecordsHashTable = @{}
+$newRecords | ForEach-Object { $newRecordsHashTable[$_.sAMAccountName] = $_ }
 
-foreach ($oldUser in $oldUsers) {
-    $sAMAccountName = $oldUser.sAMAccountName
-    if ($newUsersHashTable.ContainsKey($sAMAccountName)) {
-        $newUser = $newUsersHashTable[$sAMAccountName]
-        $oldDN = $oldUser.DistinguishedName
-        $newDN = $newUser.DistinguishedName
+foreach ($oldEntry in $oldRecords) {
+    $sAMAccountName = $oldEntry.sAMAccountName
+    if ($newRecordsHashTable.ContainsKey($sAMAccountName)) {
+        $newEntry = $newRecordsHashTable[$sAMAccountName]
+        $oldDN = $oldEntry.DistinguishedName
+        $newDN = $newEntry.DistinguishedName
 
         # DistinguishedName diff
         $differencePoints = Compare-Object -ReferenceObject ($oldDN -split ',') -DifferenceObject ($newDN -split ',') | ForEach-Object {
@@ -73,8 +73,8 @@ foreach ($oldUser in $oldUsers) {
         $removed = @()
         $added = @()
         $diffs = @()
-        $oldMemberOf = $oldUser.MemberOf
-        $newMemberOf = $newUser.MemberOf
+        $oldMemberOf = $oldEntry.MemberOf
+        $newMemberOf = $newEntry.MemberOf
         $memberOfDiff = ""
         if ($null -ne $oldMemberOf -or $null -ne $newMemberOf) {
             $oldSet = @()
@@ -101,10 +101,10 @@ foreach ($oldUser in $oldUsers) {
 
         # Additional user properties
         if ($isUserExport) {
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldEnabled -Value ($oldUser.Enabled)
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewEnabled -Value ($newUser.Enabled)
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldPasswordNeverExpires -Value ($oldUser.PasswordNeverExpires)
-            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewPasswordNeverExpires -Value ($newUser.PasswordNeverExpires)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldEnabled -Value ($oldEntry.Enabled)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewEnabled -Value ($newEntry.Enabled)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name OldPasswordNeverExpires -Value ($oldEntry.PasswordNeverExpires)
+            $comparisonResult | Add-Member -MemberType NoteProperty -Name NewPasswordNeverExpires -Value ($newEntry.PasswordNeverExpires)
         }
 
         # Output logic
@@ -116,12 +116,12 @@ foreach ($oldUser in $oldUsers) {
             $comparisonResults += $comparisonResult
         }
 
-        $newUsersHashTable.Remove($sAMAccountName)
+        $newRecordsHashTable.Remove($sAMAccountName)
     } else {
         # Deleted in new
         $comparisonResults += [PSCustomObject]@{
             sAMAccountName        = $sAMAccountName
-            OldDistinguishedName  = $oldUser.DistinguishedName
+            OldDistinguishedName  = $oldEntry.DistinguishedName
             NewDistinguishedName  = ""
             DifferencePoints      = "--- Missing in new"
             MemberOfDiff          = ""
@@ -130,11 +130,11 @@ foreach ($oldUser in $oldUsers) {
 }
 
 # Added in new
-foreach ($newUser in $newUsersHashTable.Values) {
+foreach ($newEntry in $newRecordsHashTable.Values) {
     $comparisonResults += [PSCustomObject]@{
-        sAMAccountName        = $newUser.sAMAccountName
+        sAMAccountName        = $newEntry.sAMAccountName
         OldDistinguishedName  = ""
-        NewDistinguishedName  = $newUser.DistinguishedName
+        NewDistinguishedName  = $newEntry.DistinguishedName
         DifferencePoints      = "+++ New in new"
         MemberOfDiff          = ""
     }
