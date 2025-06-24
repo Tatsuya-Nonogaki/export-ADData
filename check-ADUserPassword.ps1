@@ -13,7 +13,7 @@
   PowerShell will prompt you if omitted.
  
  .PARAMETER Password
-  (Alias -p) The passowrd string in plain text. Mandatory but PowerShell 
+  (Alias -p) The passowrd string in plain text. Mandatory but the script 
   will prompt you if omitted, which is recommended for security.
  
  .PARAMETER Domain
