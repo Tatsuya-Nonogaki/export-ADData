@@ -6,7 +6,7 @@
   Checks whether the user's password is set as expected by querying the AD. 
   You can preset Domain in the script itself to save labor when running the 
   script repeatedly.
-  Version: 0.1.0
+  Version: 0.1.1
  
  .PARAMETER UserName
   (Alias -u) The user whose password is to be validated. Mandatory but 
@@ -18,7 +18,7 @@
  
  .PARAMETER Domain
   (Alias -d) Optional. The AD Domain to query. The preset Domain is used if 
-  omitted.
+  omitted. It accepts either dot-notation and DistinguishedName format.
 #>
 [CmdletBinding()]
 param(
@@ -26,7 +26,7 @@ param(
     [Alias("u")]
     [string]$UserName,
 
-    [Parameter(Position=1, Mandatory=$true)]
+    [Parameter(Position=1)]
     [Alias("p")]
     [string]$Password,
 
@@ -40,6 +40,19 @@ $MyDomain = "mytestrealm.local"
 
 Import-Module ActiveDirectory -ErrorAction Stop
 
+if (-not $Password) {
+    $SecurePassword = Read-Host "Enter Password" -AsSecureString
+    # Convert to plain text for DirectoryEntry operation
+    $Ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
+    try {
+        $PasswordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($Ptr)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Ptr)
+    }
+} else {
+    $PasswordPlain = $Password
+}
+
 if ($Domain) {
     $domainURL = "LDAP://" + $Domain
 } else {
@@ -49,7 +62,7 @@ if ($Domain) {
 $domainObj =  New-Object System.DirectoryServices.DirectoryEntry(
    $domainURL, 
    $UserName,
-   $Password
+   $PasswordPlain
 )
 if ($null -eq $domainObj.Name) {
   Write-Host "User `"$Username`": password unmatched or user is not active" -ForegroundColor Yellow
