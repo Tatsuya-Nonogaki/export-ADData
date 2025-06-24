@@ -195,12 +195,12 @@ The intended usage is to export by specifying the domain basis, so that objects 
   PowerShell will prompt you if omitted.
 
 .PARAMETER Password
-  (Alias -p) The passowrd string in plain text. Mandatory but PowerShell 
+  (Alias -p) The passowrd string in plain text. Mandatory but the script 
   will prompt you if omitted, which is recommended for security.
 
 .PARAMETER Domain
   (Alias -d) Optional. The AD Domain to query. The preset Domain is used if 
-  omitted.
+  omitted. It accepts either dot-notation and DistinguishedName format.
 ```
 
 ## Examples
