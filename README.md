@@ -161,8 +161,13 @@ The intended usage is to export by specifying the domain basis, so that objects 
   Compare two CSVs of users or groups exported from Active Directory.
 
 .DESCRIPTION
-  Compare two CSVs of users or groups exported from Active Directory, 
-  with sAMAccountName as the key.
+  Comparison is done with sAMAccountName as the key, without being affected by 
+  the order of records in the CSV file, unlike ordinary "diff" tools. Detects 
+  and outputs records where there is a difference in DistinguishedName, MemberOf, 
+  or when an entry is present only on one side.
+  For user CSVs, differences in 'Enabled' and 'PasswordNeverExpires' are also 
+  checked and reported, but these fields are considered auxiliary and do not 
+  affect the main inclusion criteria.
 
 .PARAMETER OldFile
   (Alias -o) Mandatory. Old CSV file to compare, with relative or absolute 
