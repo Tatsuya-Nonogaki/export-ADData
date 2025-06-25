@@ -31,10 +31,10 @@ The intended usage is to export by specifying the domain basis, so that objects 
 - Compare two CSV files of AD users or groups.
 - Comparison is done with sAMAccountName as the key.
 - Comparison is not affected by the order of records in the CSV file, unlike ordinary "diff" tools.
-- Show difference of DistinguishedName, MemberOf, or entry absence on one side.
-- `Enabled` and `PasswordNeverExpires` properties of users are also verified.
-- Optionally output also entries with no difference. 
-- Output a CSV file or to the PS console.
+- Detects and outputs records where there is a difference in DistinguishedName, MemberOf, or when an entry is present only on one side.
+- For user CSVs, differences in `Enabled` and `PasswordNeverExpires` are also checked and reported, but these fields are considered auxiliary and do not affect the main inclusion criteria.
+- Optionally, you can include entries with no detected differences in the output (`-IncludeEqual` switch).
+- Output is written to a CSV file or shown in the PowerShell console.
 
 ### check-ADUserPassword
 - Checks whether the user's password is set as expected by querying the AD.
