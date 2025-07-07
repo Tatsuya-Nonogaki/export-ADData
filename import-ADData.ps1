@@ -1,81 +1,86 @@
 <#
  .SYNOPSIS
   Imports users and groups into Active Directory.
- 
+
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
-  You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.6
- 
- .PARAMETER DNPath
-  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
-  Base of the Domain hierarchy onto which you want import objects. Its 
-  argument must be in DistinguishedName form like "DC=mydomain,DC=local" 
-  or "OU=sales,DC=mydomain,DC=local". This parameter is much preferable 
-  than its alternative -DNPrefix (below) for accuracy.
-  IMPORTANT: The target base DN object, e.g. OU, must exist on the 
-  destination AD prior to import.
- 
- .PARAMETER DNPrefix
-  (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
-  Its argument must be in dotted format. For example: "unit.mydomain.local" 
-  which is converted internally to DistinguishedName(=DNPath) 
-  "OU=unit,DC=mydomain,DC=local".
- 
- .PARAMETER DCDepth
-  Optional. Can be used with -DNPrefix. Mutually exclusive with -DNPath. 
-  In calculation of the DNPath, we assume the last 2 elements are DC 
-  per default. If it is not what you expect, specify depth count of DC 
-  with this. e.g., when -DNPrefix dept.unit.mydomain.local, then 
-   DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
-   DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
- 
- .PARAMETER User
-  (Alias -u) Operates in user import mode. If -UserFile (below) is 
-  specified, this switch is implied and can be omitted.
- 
- .PARAMETER UserFile
-  (Alias -uf) Optional. Path of input user CSV file. File selection 
-  dialog will prompt you to choose, if omitted despite -User switch is set.
-  Note: If you want to register password to any users, make a copy of 
-  the whole CSV file, add "Password" column to it, which is missing from 
-  the original, and put password in plain text. Password is required to 
-  restore the "Enabled" flag of the account.
- 
- .PARAMETER Group
-  (Alias -g) Operates in group import mode. If -GroupFile (below) is 
-  specified, this switch is implied and can be omitted.
- 
- .PARAMETER GroupFile
-  (Alias -gf) Optional. Path of input group CSV file. File selection 
-  dialog will prompt you to choose, if omitted despite -Group switch 
-  is set.
- 
- .PARAMETER IncludeSystemObject
-  Optional. Import also users and groups which are critical system object, 
-  such as: Administrator(s), Domain Admins and trusted DOMAIN$. This is 
-  usually dangerous and leads to AD system breakdown.
- 
- .PARAMETER NewUPNSuffix
-  Optional. New UserPrincipalName suffix to use for conversion. If not 
-  provided, script will convert UPN based on DNPath. It is usually not 
-  necessary to specify.
- 
- .PARAMETER NoProtectNewOU
-  Optional. If specified, newly created OUs will not be protected from 
-  accidental deletion. By default, OUs will be created in protected state.
+  You can import users only, groups only, or both at once.
+  Supports advanced scenarios such as domain migration, OU reorganization, flattening 
+  OU hierarchies by trimming OUs, and more.
+  Automatically creates missing intermediate OUs as needed.
+  Special options allow for placing users/groups with no OU or in the 'Users' 
+  container directly under the domain root.
   
+  Version: 0.9.0.a
+
+ .PARAMETER DNPath
+  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. The target 
+  base DN for import (e.g., "DC=mydomain,DC=local" or "OU=branch,DC=mydomain,DC=local").
+  Preferred over -DNPrefix for accuracy.
+  IMPORTANT: The base DN object must exist in the destination AD prior to import.
+
+ .PARAMETER DNPrefix
+  (Alias -d) Alternative to -DNPath. Mutually exclusive.
+  Dotted format (e.g., "unit.mydomain.local"), converted internally to DNPath.
+
+ .PARAMETER DCDepth
+  Optional. Used only with -DNPrefix. How many trailing elements are treated as DC 
+  components (default: 2).
+
+ .PARAMETER User
+  (Alias -u) Operates in user import mode. Implied if -UserFile is specified.
+
+ .PARAMETER UserFile
+  (Alias -uf) Path to user CSV file. 
+  If omitted with -User, a file selection dialog prompts you.
+  
+  Note: If you want to register password to any users, make a copy of the whole 
+  CSV file, add "Password" column to it, which is missing from the original, and 
+  put password in plain text. Password is required to restore the "Enabled" flag 
+  of the account.
+
+ .PARAMETER Group
+  (Alias -g) Operates in group import mode. Implied if -GroupFile is specified.
+
+ .PARAMETER GroupFile
+  (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
+  dialog prompts you.
+
+ .PARAMETER IncludeSystemObject
+  Optional. Import also critical system users/groups and trusted DOMAIN$ (normally 
+  dangerous for regular environments).
+
+ .PARAMETER NewUPNSuffix
+  Optional. Specify a new UserPrincipalName suffix for imported users. Defaults to 
+  value derived from -DNPath.
+
+ .PARAMETER NoProtectNewOU
+  Optional. If set, newly created OUs will not be protected from accidental deletion.
+
+ .PARAMETER TrimOU
+  Optional. Remove one or more leading OUs from source DNs before import.
+  Accepts a comma-separated list or full DN (e.g., "OU=deeper,OU=sales" or "deeper,sales").
+  Useful for flattening or partially flattening OU hierarchies during migration.
+
+ .PARAMETER NoUsersContainer
+  Optional. Place users/groups with no OU, or in the 'Users' container, directly under 
+  the domain root (DC=...) instead of the default CN=Users container.
+
  .EXAMPLE
-  # Import AD Groups from CSV to a new Domain basis, excluding system objects
-  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile "C:\ADExport\Groups_mydomain_local.csv"
- 
+  # Import AD Groups from CSV to a new domain, excluding system objects
+  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile ".\Groups_olddomain_local.csv"
+
  .EXAMPLE
-  # Import AD Users from CSV to an OU on a Domain. A file selection dialog will pop-up to let you choose CSV.
+  # Import AD Users from CSV to an OU on a domain, using a file dialog
   .\import-ADData.ps1 -DNPath "OU=unit,DC=newdomain,DC=local" -User
- 
+
  .EXAMPLE
-  # Import AD Users and Groups at a time. Internally, users are processed after the whole groups, but this is not recommended because of potential massive errors due to group/user to groups membership dependency violation when any of groups were not successfully created.
-  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "C:\ADExport\Users_mydomain_local.csv" -GroupFile "C:\ADExport\Groups_mydomain_local.csv"
+  # Import users, trimming two leading OUs and placing directly under domain root (not in CN=Users)
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "OU=deeper,OU=sales" -NoUsersContainer
+
+ .EXAMPLE
+  # Import users and groups at once (not recommended for large sets with group dependencies)
+  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
 #>
 [CmdletBinding()]
 param(
@@ -113,7 +118,13 @@ param(
     [string]$NewUPNSuffix,
 
     [Parameter()]
-    [switch]$NoProtectNewOU
+    [switch]$NoProtectNewOU,
+
+    [Parameter()]
+    [string]$TrimOU,
+
+    [Parameter()]
+    [switch]$NoUsersContainer    
 )
 
 begin {
@@ -128,6 +139,23 @@ begin {
         )
         $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         "$Timestamp - $Message" | Out-File -Append -FilePath $LogFilePath
+    }
+
+    # Normalize TrimOU argument to an array like @('deeper','sales')
+    $TrimOUList = @()
+    if ($TrimOU) {
+        if ($TrimOU -match '^OU=') {
+            # DN format
+            $TrimOUList = $TrimOU -split ',' | ForEach-Object {
+                ($_ -replace '^OU=', '').Trim()
+            }
+        } else {
+            # Abbreviated format
+            $TrimOUList = $TrimOU -split ',' | ForEach-Object {
+                $_.Trim()
+            }
+        }
+        Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
     }
 
     # Determine protection option for new OUs
