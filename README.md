@@ -110,9 +110,9 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 ##### -TrimOU
 
-Allows you to remove one or more leading OUs from the DistinguishedName of imported objects.  
+Allows you to remove one or more leading OUs from the DistinguishedName of imported objects. Two formats are valid.  
 - **Full DN format:** e.g., `OU=deeper,OU=sales`
-- **Abbreviated format:** e.g., `deeper,sales` (converted internally)
+- **Abbreviated format:** e.g., `deeper,sales`
 
 The value must match the most descendant (left-most) OU sequence of the source DN, in order. Trimming only occurs if the source DN starts with the specified sequence.
 
@@ -122,7 +122,7 @@ The value must match the most descendant (left-most) OU sequence of the source D
 |------------------------------------------|--------------------------|---------------------------------------|---------------------------------------------|
 | OU=deeper,OU=sales,DC=domain,DC=local   | OU=sales                 | OU=deeper,OU=sales,DC=domain,DC=local | NO match (top OU is "deeper", not "sales")  |
 | OU=deeper,OU=sales,DC=domain,DC=local   | OU=deeper,OU=sales       | DC=domain,DC=local                    | MATCH (exact sequence), both OUs trimmed    |
-| OU=deeper,OU=sales,DC=domain,DC=local   | deeper                   | OU=sales,DC=domain,DC=local           | MATCH (top OU), "deeper" trimmed only       |
+| OU=deeper,OU=sales,DC=domain,DC=local   | OU=deeper                | OU=sales,DC=domain,DC=local           | MATCH (top OU), "deeper" trimmed only       |
 | OU=sales,DC=domain,DC=local             | OU=sales                 | DC=domain,DC=local                    | MATCH (top OU), "sales" trimmed             |
 
 **Assumptions:**
