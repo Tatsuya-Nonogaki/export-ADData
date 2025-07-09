@@ -24,7 +24,7 @@ When importing, four major strategies are expected:
 3. **Export specifying "DC=domain,DC=local" and import to "OU=osaka,DC=domain,DC=local"**  
    Whole migration from the domain basis to a new specific OU, along with all intermediate OUs the users/groups depend on. In this case, users under CN=Users container are created just under OU=osaka because it is impossible to create "Users" container nor OU=Users under the OU. Specifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
 
-4. **Export specifying "OU=sales,DC=domain,DC=local" and import to "DC=domain,DC=local" with `-TrimOU OU=sales`**  
+4. **Export specifying "OU=sales,DC=domain,DC=local" and import to "DC=domain,DC=local" with `-TrimOU sales`**  
    Useful for flattening part of the OU hierarchy. By exporting from a specific OU and importing to the domain root with `-TrimOU`, you can migrate only the objects under that OU directly to the root (or another OU), effectively removing their original OU nesting.
 
 ---
@@ -110,27 +110,32 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 ##### -TrimOU
 
-Allows you to remove one or more leading OUs from the DistinguishedName of imported objects. Two formats are valid.  
-- **Full DN format:** e.g., `OU=deeper,OU=sales`
-- **Abbreviated format:** e.g., `deeper,sales`
+Allows you to remove one or more leading OUs from the DistinguishedName of imported objects. The argument must be a comma-separated list of OU names (without the `OU=` prefix).
 
-The value must match the most descendant (left-most) OU sequence of the source DN, in order. Trimming only occurs if the source DN starts with the specified sequence.
+```powershell
+-TrimOU "deeper,sales"
+```
+This example trims `OU=deeper,OU=sales` from the start of each DN path, if present.
+
+**Rules:**
+- Only plain OU names are allowed. Do not use `OU=` prefix, full DN fragments, or any other prefix.
+- Matching always occurs from the start (left-most) of the OU sequence.
+- Trimming never removes `DC`, `CN`, or any components other than OUs.
+- The following are reserved words and are **not permitted as OU names in the `-TrimOU` argument**: `ou`, `cn`, `dc`, and `users` (case-insensitive match).  
+  *Note: This is a local rule for this script, not a restriction imposed by Active Directory itself, but it prevents confusion and scripting errors.*
+- Empty patterns (e.g., `,,`) are invalid.
+- If any invalid name is detected, the script will abort with an error.
+- **Note:** When specifying multiple OU names for `-TrimOU`, always enclose the list in quotes (single or double), for example: `-TrimOU "deeper,sales"`. This ensures PowerShell passes the entire list as a single argument.
+
+The value must match the most descendant (left-most) OU sequence of the source DN, in exact order. Trimming only occurs if the source DN starts with the specified sequence.
 
 **Examples:**
 
-| Exported DN                             | -TrimOU Argument          | Resulting Path After Trim             | Explanation                                 |
-|------------------------------------------|--------------------------|---------------------------------------|---------------------------------------------|
-| OU=deeper,OU=sales,DC=domain,DC=local   | OU=sales                 | OU=deeper,OU=sales,DC=domain,DC=local | NO match (top OU is "deeper", not "sales")  |
-| OU=deeper,OU=sales,DC=domain,DC=local   | OU=deeper,OU=sales       | DC=domain,DC=local                    | MATCH (exact sequence), both OUs trimmed    |
-| OU=deeper,OU=sales,DC=domain,DC=local   | OU=deeper                | OU=sales,DC=domain,DC=local           | MATCH (top OU), "deeper" trimmed only       |
-| OU=sales,DC=domain,DC=local             | OU=sales                 | DC=domain,DC=local                    | MATCH (top OU), "sales" trimmed             |
-
-**Assumptions:**
-- Trimming never removes DC components.
-- Match is always from the start of the OU sequence.
-
-**Precautions:**
-- If, after trimming, no OU remains and the destination DNPath is the DC-root, see the behavior of `-NoUsersContainer` below.
+| Exported DN                           | -TrimOU Argument | Resulting Path After Trim         | Explanation                                 |
+|---------------------------------------|------------------|-----------------------------------|---------------------------------------------|
+| OU=deeper,OU=sales,DC=domain,DC=local | sales            | OU=deeper,OU=sales,DC=domain,DC=local | No match (top OU is "deeper", not "sales")  |
+| OU=deeper,OU=sales,DC=domain,DC=local | deeper           | OU=sales,DC=domain,DC=local       | Match (top OU), only "deeper" trimmed       |
+| OU=deeper,OU=sales,DC=domain,DC=local | deeper,sales     | DC=domain,DC=local                | Match (exact sequence), both OUs trimmed    |
 
 ---
 
@@ -154,14 +159,17 @@ If you specify `-NoUsersContainer`, such objects are instead created directly un
 #### Usage Examples
 
 ```powershell
-# Import users, trimming two leading OUs, placing in Users container (default)
-.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "Users.csv" -TrimOU "deeper,sales"
+# Import AD Groups from CSV to a new domain, excluding system objects
+.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile ".\Groups_olddomain_local.csv"
 
-# Import users, trimming two leading OUs (full DN format), placing directly under domain root (not CN=Users)
-.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "Users.csv" -TrimOU "OU=deeper,OU=sales" -NoUsersContainer
+# Import AD Users from CSV to an OU on a domain, using a file dialog
+.\import-ADData.ps1 -DNPath "OU=osaka,DC=newdomain,DC=local" -User
 
-# Import users with no OUs, placing them directly under the domain root
-.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "Users.csv" -NoUsersContainer
+# Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
+.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
+
+# Import users, trimming two leading OUs and placing directly under domain root (not in CN=Users)
+.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoUsersContainer
 ```
 
 #### Best Practices and Safety Tips
