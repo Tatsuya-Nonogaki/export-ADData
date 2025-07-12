@@ -4,18 +4,17 @@
 
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
-  You can import users only, groups only, or both at once.
   Supports advanced scenarios such as domain migration, OU reorganization, flattening 
   OU hierarchies by trimming OUs, and more.
   Automatically creates missing intermediate OUs as needed.
   Special options allow for placing users/groups with no OU or in the 'Users' 
-  container directly under the domain root.
+  container directly under the domain root, or for importing objects as-is.
   
-  Version: 0.9.0.a
+  Version: 0.9.0.b
 
  .PARAMETER DNPath
-  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. The target 
-  base DN for import (e.g., "DC=mydomain,DC=local" or "OU=branch,DC=mydomain,DC=local").
+  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
+  The target base DN for import (e.g., "DC=mydomain,DC=local" or "OU=branch,DC=mydomain,DC=local").
   Preferred over -DNPrefix for accuracy.
   IMPORTANT: The base DN object must exist in the destination AD prior to import.
 
@@ -33,11 +32,10 @@
  .PARAMETER UserFile
   (Alias -uf) Path to user CSV file. 
   If omitted with -User, a file selection dialog prompts you.
-  
-  Note: If you want to register password to any users, make a copy of the whole 
-  CSV file, add "Password" column to it, which is missing from the original, and 
-  put password in plain text. Password is required to restore the "Enabled" flag 
-  of the account.
+
+  Note: To register password to any users, make a copy of the whole CSV file, 
+  add a "Password" column, and put password in plain text. Do note that Password 
+  is required to restore the "Enabled" flag of the account.
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Implied if -GroupFile is specified.
@@ -62,9 +60,23 @@
   Accepts a comma-separated list or full DN (e.g., "OU=deeper,OU=sales" or "deeper,sales").
   Useful for flattening or partially flattening OU hierarchies during migration.
 
+  .PARAMETER TrimOU
+  Optional. Removes one or more leading OUs from imported DistinguishedNames.
+  Accepts a comma-separated list of OU names (without 'OU=' prefix).
+  Only plain OU names are allowed, matching from the start of the OU sequence.
+  Reserved words (ou, cn, dc, users) are not permitted (case-insensitive, script-local rule).
+  Always enclose multiple names in quotes, e.g. -TrimOU "deeper,sales".
+  For full details and examples, see the README.
+
  .PARAMETER NoUsersContainer
   Optional. Place users/groups with no OU, or in the 'Users' container, directly under 
   the domain root (DC=...) instead of the default CN=Users container.
+  Mutually exclusive with -NoForceUsersContainer.
+
+ .PARAMETER NoForceUsersContainer
+  Optional. Import objects as their DN dictates: if the DN is directly under the 
+  domain root, import as is; if under Users container, import as is.
+  Mutually exclusive with -NoUsersContainer.
 
  .EXAMPLE
   # Import AD Groups from CSV to a new domain, excluding system objects
@@ -72,15 +84,15 @@
 
  .EXAMPLE
   # Import AD Users from CSV to an OU on a domain, using a file dialog
-  .\import-ADData.ps1 -DNPath "OU=unit,DC=newdomain,DC=local" -User
+  .\import-ADData.ps1 -DNPath "OU=osaka,DC=newdomain,DC=local" -User
+
+ .EXAMPLE
+  # Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
 
  .EXAMPLE
   # Import users, trimming two leading OUs and placing directly under domain root (not in CN=Users)
-  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "OU=deeper,OU=sales" -NoUsersContainer
-
- .EXAMPLE
-  # Import users and groups at once (not recommended for large sets with group dependencies)
-  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoUsersContainer
 #>
 [CmdletBinding()]
 param(
@@ -124,7 +136,10 @@ param(
     [string]$TrimOU,
 
     [Parameter()]
-    [switch]$NoUsersContainer    
+    [switch]$NoUsersContainer,
+
+    [Parameter()]
+    [switch]$NoForceUsersContainer
 )
 
 begin {
@@ -141,34 +156,15 @@ begin {
         "$Timestamp - $Message" | Out-File -Append -FilePath $LogFilePath
     }
 
-    # Normalize TrimOU argument to an array like @('deeper','sales')
-    $TrimOUList = @()
-    if ($TrimOU) {
-        if ($TrimOU -match '^OU=') {
-            # DN format
-            $TrimOUList = $TrimOU -split ',' | ForEach-Object {
-                ($_ -replace '^OU=', '').Trim()
-            }
-        } else {
-            # Abbreviated format
-            $TrimOUList = $TrimOU -split ',' | ForEach-Object {
-                $_.Trim()
-            }
-        }
-        Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
-    }
-
-    # Determine protection option for new OUs
-    if ($NoProtectNewOU) {
-        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $false }
-    } else {
-        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $true }
-    }
-
     # Arguments validation
     if ($PSBoundParameters.Count -eq 0) {
         Get-Help $MyInvocation.InvocationName
         exit
+    }
+
+    # Mutually exclusive: NoUsersContainer and NoForceUsersContainer
+    if ($NoUsersContainer -and $NoForceUsersContainer) {
+        throw "Error: -NoUsersContainer and -NoForceUsersContainer are mutually exclusive. Please specify only one."
     }
 
     if (-not $PSBoundParameters.ContainsKey('DNPath')) {
@@ -187,6 +183,29 @@ begin {
     if (-not ($PSBoundParameters.ContainsKey('User') -or $PSBoundParameters.ContainsKey('UserFile') -or `
               $PSBoundParameters.ContainsKey('Group') -or $PSBoundParameters.ContainsKey('GroupFile'))) {
         throw "Error: At least one of -User, -UserFile, -Group, or -GroupFile must be specified."
+    }
+
+    # Determine protection option for new OUs
+    if ($NoProtectNewOU) {
+        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $false }
+    } else {
+        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $true }
+    }
+
+    # TrimOU parsing and validation
+    $TrimOUList = @()
+    if ($PSBoundParameters.ContainsKey('TrimOU')) {
+        $reservedWords = @('ou', 'cn', 'dc', 'users')
+        $TrimOUList = $TrimOU -split ',' | ForEach-Object { $_.Trim() }
+
+        $invalid = $TrimOUList | Where-Object { ($_ -eq '') -or ($reservedWords -contains $_.ToLower()) }
+        if ($invalid.Count -gt 0) {
+            $msg = "Error: -TrimOU may only contain valid OU names (no reserved words or empty values). Invalid entries: " + ($invalid -join ', ')
+            Write-Host $msg -ForegroundColor Red
+            Write-Log $msg
+            throw $msg
+        }
+        Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
     }
 }
 
