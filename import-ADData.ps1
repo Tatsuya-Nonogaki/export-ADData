@@ -10,7 +10,7 @@
   Special options allow for placing users/groups with no OU or in the 'Users' 
   container directly under the domain root, or for importing objects as-is.
   
-  Version: 0.9.0.b
+  Version: 0.9.1
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -185,6 +185,17 @@ begin {
         throw "Error: At least one of -User, -UserFile, -Group, or -GroupFile must be specified."
     }
 
+    # UPN suffix sanity check
+    if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
+        $upnPattern = '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
+        if ($NewUPNSuffix -eq '' -or $NewUPNSuffix -notmatch $upnPattern) {
+            $msg = "Error: -NewUPNSuffix must be a non-empty domain-style string (e.g. 'company.local', 'example.com'), containing only letters, digits, dots and hyphens, and have at least one dot."
+            Write-Host $msg -ForegroundColor Red
+            Write-Log $msg
+            throw $msg
+        }
+    }
+
     # Determine protection option for new OUs
     if ($NoProtectNewOU) {
         $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $false }
@@ -313,7 +324,7 @@ process {
         }
     }
 
-    # Return translated parent path of the given object and create required OUs if not exist
+    # Calculate new target DN to place the given DistinguishedName of the object on
     function ConvertDNBase {
         param (
             [string]$oldDN,
@@ -321,121 +332,80 @@ process {
             [switch]$CreateOUIfNotExists
         )
 
-        # Obtain leading OU part
+        # --- 1. Parse and split original DN into arrays ---
         $dnParts = $oldDN -split ","
+        $cnPart = $dnParts | Where-Object { $_ -match "^CN=" }
         $ouParts = $dnParts | Where-Object { $_ -match "^OU=" }
-        $newDNPathHasOU = if ($newDNPath -match '^OU=') { $true }
 
-        if ($ouParts) {
-            $importTargetOU = "$($ouParts -join ","),$newDNPath"
+        # --- 2. Remove leading OUs from ouParts array according to '-TrimOU' argument ---
+        if ($TrimOUList -and $TrimOUList.Count -gt 0) {
+            foreach ($trim in $TrimOUList) {
+                if ($ouParts.Count -gt 0 -and ($ouParts[0] -replace '^OU=', '').Trim() -eq $trim) {
+                    $ouParts = $ouParts[1..($ouParts.Count - 1)]
+                } else {
+                    break
+                }
+            }
+            Write-Log "debug :: ouParts after TrimOU: $($ouParts -join ',')"
+        }
 
-          # Write-Log "debug :: importTargetOU = $importTargetOU"
+        # --- 3. Compose the new DN path ---
+        $hasOUs = $ouParts.Count -gt 0
+        $baseDC = $newDNPath -replace '^(OU=[^,]+,)*', ''
+
+        # --- 3-A. In case any OUs remain ---
+        if ($hasOUs) {
+            $importTargetOU = ($ouParts -join ',') + "," + $newDNPath
+
+            # Optionally create OUs if requested
             if ($CreateOUIfNotExists) {
-                $ouList = $importTargetOU -split ",\s*" | Where-Object { $_ -match "^OU=" }
+                $ouList = $ouParts
                 [array]::Reverse($ouList)
-                $previousOUBase = ""
+                $previousOUBase = $baseDC
 
-                # Create parent OUs from parent to child
                 foreach ($ou in $ouList) {
                     $ou = $ou.Trim()
-                  # Write-Log "debug :: processing ou = $ou"
+                  # Write-Log "debug :: processing ou: $ou"
                     $ouName = $ou -replace "^OU=", ""
-
-                    if ($previousOUBase) {
-                        $currentOUBase = $previousOUBase
-                    } else {
-                        # Remove preceding non-DC components from DNPath
-                        $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
-                    }
-
-                  # Write-Log "debug :: currentOUBase = $currentOUBase"
-
-                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
-                        Write-Log "Creating required OU: ${ou},$currentOUBase"
+                    # Check if OU exists, create if not
+                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$previousOUBase'" -ErrorAction SilentlyContinue)) {
+                        Write-Log "Creating required OU: ${ou},$previousOUBase"
                         try {
-                            if (($currentOUBase -eq $newDNPath) -and -not $newDNPathHasOU) {
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
-                            } else {
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
-                            }
-
-                            Write-Host "OU Created: ${ou},$currentOUBase"
-                            Write-Log "OU Created: ${ou},$currentOUBase"
+                            Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $previousOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
+                            New-ADOrganizationalUnit -Name $ouName -Path $previousOUBase @newOUcommonOpts -ErrorAction Stop
+                            Write-Host "OU Created: ${ou},$previousOUBase"
+                            Write-Log "OU Created: ${ou},$previousOUBase"
                         } catch {
-                            Write-Error "Failed to create OU ${ou},$currentOUBase"
-                            Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
+                            Write-Error "Failed to create OU ${ou},$previousOUBase"
+                            Write-Log "Failed to create OU: ${ou},$previousOUBase - $_"
                         }
                     }
-                   #else {
-                   #    Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
-                   #}
-                    $previousOUBase = "OU=${ouName},$currentOUBase"
+                    $previousOUBase = "${ou},$previousOUBase"
                 }
             }
             return $importTargetOU
         }
-        elseif ($oldDN -match "^CN=.*?,CN=Users,DC=") {
-            if ($newDNPathHasOU) {
-                # Place directly under the specified DNPath without intermediate CN=Users
-                $importTargetOU = $newDNPath
-                Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
 
-                if ($CreateOUIfNotExists) {
-                    $ouList = $newDNPath -split ",\s*" | Where-Object { $_ -match "^OU=" }
-                    [array]::Reverse($ouList)
-                    $previousOUBase = ""
+        # --- 3-B. In case no OUs remain: only CN and DC ---
+        $isUsersContainer = $oldDN -match "^CN=.*?,CN=Users,DC="
+        $isAtDomainRoot = $oldDN -match "^CN=.*?,DC="
 
-                    foreach ($ou in $ouList) {
-                        $ou = $ou.Trim()
-                      # Write-Log "debug :: processing ou = $ou"
-                        $ouName = $ou -replace "^OU=", ""
-
-                        if ($previousOUBase) {
-                            $currentOUBase = $previousOUBase
-                        } else {
-                            # Remove preceding non-DC components from DNPath
-                            $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
-                        }
-
-                      # Write-Log "debug :: currentOUBase = $currentOUBase"
-
-                        if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
-                            Write-Log "Creating required OU: ${ou},$currentOUBase"
-                            try {
-                                if ($currentOUBase -eq $newDNPath) {
-                                    Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                    New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
-                                } else {
-                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
-                                }
-
-                                Write-Host "OU Created: ${ou},$currentOUBase"
-                                Write-Log "OU Created: ${ou},$currentOUBase"
-                            } catch {
-                                Write-Error "Failed to create OU ${ou},$currentOUBase"
-                                Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
-                            }
-                        }
-                       #else {
-                       #    Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
-                       #}
-                        $previousOUBase = "OU=${ouName},$currentOUBase"
-                    }
-                }
-                return $importTargetOU
+        # Policy matrix based on switches
+        if ($NoUsersContainer) {
+            # Always place at domain root (strip Users container)
+            return $baseDC
+        }
+        elseif ($NoForceUsersContainer) {
+            # Place as-is: if Users container, keep; if domain root, keep
+            if ($isUsersContainer) {
+                return "CN=Users," + $baseDC
             } else {
-                $importTargetOU = "CN=Users," + ($newDNPath -replace '^(OU=[^,]+,)*', '')
-                Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
-                return $importTargetOU
+                return $baseDC
             }
         }
         else {
-            Write-Host "No OU found in DN: $oldDN. Assigning default path: $newDNPath" -ForegroundColor Yellow
-            Write-Log "No OU found in DN: $oldDN. Assigning default path: $newDNPath"
-            return $newDNPath
+            # Default: force into Users container if no OU present
+            return "CN=Users," + $baseDC
         }
     }
 
