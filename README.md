@@ -81,6 +81,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 - Handle objects in `CN=Users` container specially and appropriately, redirecting them to a designated OU when needed.
 - Create missing intermediate OUs during the import.
 - Detailed logging of import operations.
+- Never overwrite existing Users/Groups. Warn and skip in each case.
 - Option to disable "protect from accidental deletion" for newly created OUs, useful for pre-validation etc.
 - Supports registering user passwords if provided in the CSV.
 - Advanced features for OU trimming and control over Users container placement (`-TrimOU`, `-NoUsersContainer`, `-NoForceUsersContainer`).
