@@ -112,30 +112,34 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 ##### -TrimOU
 
-Allows you to remove one or more leading OUs from the DistinguishedName of imported objects. The argument must be a comma-separated list of OU names (without the `OU=` prefix).
+Allows you to remove one or more OUs from the end (domain-root side) of the DistinguishedName of imported objects. The argument must be a comma-separated list of OU names (without the `OU=` prefix).
 
 ```powershell
 -TrimOU "deeper,sales"
 ```
-This example trims `OU=deeper,OU=sales` from the start of each DN path, if present.
+This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OUs (nearest the domain root) of each DN path, if present.
 
 **Rules:**
 - Only plain OU names are allowed. Do not use `OU=` prefix, full DN fragments, or any other prefix.
-- Trimming only occurs if the source DN starts with the specified OU sequence (the left-most/most descendant OUs), and the match must be in exact order.
+- Trimming only occurs if the source DN ends with the specified OU sequence (the right-most/nearest to domain root), and the match must be in exact order.
 - Trimming never removes `DC`, `CN`, or any components other than OUs.
-- The following are reserved words and are **not permitted as OU names in the `-TrimOU` argument**: `ou`, `cn`, `dc`, and `users` (case-insensitive match).  
-  *Note: This is a local rule for this script, not a restriction imposed by Active Directory itself, but it prevents confusion and scripting errors.*
+- The following are reserved words and are **not permitted as OU names in the `-TrimOU` argument**: `ou`, `cn`, `dc`, `users`, `=` (case-insensitive match; `=` is not permitted anywhere in the name).  
+  *Note: This is a local rule for this script, not a restriction imposed by Active Directory itself (except for `=`), but it prevents confusion and scripting errors.*
 - Empty patterns (e.g., `,,`) are invalid.
 - If any invalid name is detected, the script will abort with an error.
 - **Note:** When specifying multiple OU names for `-TrimOU`, always enclose the list in quotes (single or double), for example: `-TrimOU "deeper,sales"`. This ensures PowerShell passes the entire list as a single argument.
+- **Note:** You should only specify an OU (or sequence of OUs) for `-TrimOU` that all entries have as their rightmost OUs.  
+  If you specify OUs that are not present in some entry's DN, only those matching entries will be trimmed. Others will retain their original hierarchy, which can lead to an inconsistent and fragmented OU structure in the imported domain.
 
 **Examples:**
 
-| Exported DN                           | -TrimOU Argument | Resulting Path After Trim         | Explanation                                 |
-|---------------------------------------|------------------|-----------------------------------|---------------------------------------------|
-| OU=deeper,OU=sales,DC=domain,DC=local | sales            | OU=deeper,OU=sales,DC=domain,DC=local | No match (top OU is "deeper", not "sales")  |
-| OU=deeper,OU=sales,DC=domain,DC=local | deeper           | OU=sales,DC=domain,DC=local       | Match (top OU), only "deeper" trimmed       |
-| OU=deeper,OU=sales,DC=domain,DC=local | deeper,sales     | DC=domain,DC=local                | Match (exact sequence), both OUs trimmed    |
+| Exported DN                                         | -TrimOU Argument | Resulting Path After Trim              | Explanation                                                       |
+|-----------------------------------------------------|------------------|----------------------------------------|-------------------------------------------------------------------|
+| OU=deeper,OU=sales,DC=domain,DC=local              | sales            | OU=deeper,DC=domain,DC=local           | Match (rightmost OU is "sales"), only "sales" trimmed             |
+| OU=deeper,OU=sales,DC=domain,DC=local              | deeper           | OU=deeper,OU=sales,DC=domain,DC=local  | No match (rightmost OU is "sales", not "deeper")                  |
+| OU=deeper,OU=sales,DC=domain,DC=local              | deeper,sales     | DC=domain,DC=local                     | Match (rightmost sequence is "deeper,sales"), both OUs trimmed    |
+| OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| deeper,sales     | OU=foo,OU=bar,DC=domain,DC=local       | Match (rightmost sequence), both OUs trimmed                      |
+| OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| bar,deeper       | OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local | No match (rightmost OUs are "deeper,sales")         |
 
 ---
 
