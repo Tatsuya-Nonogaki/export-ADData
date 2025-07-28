@@ -348,7 +348,7 @@ process {
             }
         }
 
-        # --- 2. Remove leading OUs from ouParts array according to '-TrimOU' argument ---
+        # --- 2. Remove the deepest OUs from ouParts array according to '-TrimOU' argument ---
       # Write-Log "debug :: ConvertDNBase :: original oldDN: '$oldDN'"
         Write-Log "debug :: ConvertDNBase :: original ouParts: $($ouParts -join '|')"
         if ($ouParts.Count -gt 0 -and $ouParts[0].Length -le 2) {
