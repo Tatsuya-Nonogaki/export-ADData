@@ -100,7 +100,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 | `-IncludeSystemObject`    |         | No       | Import critical system users/groups (normally dangerous).                                             |
 | `-NewUPNSuffix`           |         | No       | New suffix for UserPrincipalName. Defaults to value derived from `-DNPath`.                           |
 | `-NoProtectNewOU`         |         | No       | Newly created OUs will not be protected from accidental deletion.                                     |
-| `-TrimOU`                 |         | No       | Remove one or more leading OUs from source DNs before import.                                         |
+| `-TrimOU`                 |         | No       | Remove one or more rightmost (nearest the domain root) OUs from source DNs before import.             |
 | `-NoUsersContainer`       |         | No       | Place users/groups with no OU or in Users container directly under the domain root instead of `CN=Users,DC=...`.            |
 | `-NoForceUsersContainer`  |         | No       | Import objects as their DN dictates: if the DN is directly under the domain root, import as is; if under Users container, import as is. Mutually exclusive with `-NoUsersContainer`. |
 
@@ -133,13 +133,13 @@ This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OU
 
 **Examples:**
 
-| Exported DN                                         | -TrimOU Argument | Resulting Path After Trim              | Explanation                                                       |
-|-----------------------------------------------------|------------------|----------------------------------------|-------------------------------------------------------------------|
-| OU=deeper,OU=sales,DC=domain,DC=local              | sales            | OU=deeper,DC=domain,DC=local           | Match (rightmost OU is "sales"), only "sales" trimmed             |
-| OU=deeper,OU=sales,DC=domain,DC=local              | deeper           | OU=deeper,OU=sales,DC=domain,DC=local  | No match (rightmost OU is "sales", not "deeper")                  |
-| OU=deeper,OU=sales,DC=domain,DC=local              | deeper,sales     | DC=domain,DC=local                     | Match (rightmost sequence is "deeper,sales"), both OUs trimmed    |
-| OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| deeper,sales     | OU=foo,OU=bar,DC=domain,DC=local       | Match (rightmost sequence), both OUs trimmed                      |
-| OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| bar,deeper       | OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local | No match (rightmost OUs are "deeper,sales")         |
+| Exported DN                                        | -TrimOU Argument | Resulting Path After Trim        | Explanation                                                       |
+|----------------------------------------------------|------------------|----------------------------------|-------------------------------------------------------------------|
+| OU=deeper,OU=sales,DC=domain,DC=local              | sales            | OU=deeper,DC=domain,DC=local     | Match (rightmost OU is "sales"), only "sales" trimmed             |
+| OU=deeper,OU=sales,DC=domain,DC=local              | deeper           | [ unchanged ]                    | No match (rightmost OU is "sales", not "deeper")                  |
+| OU=deeper,OU=sales,DC=domain,DC=local              | deeper,sales     | DC=domain,DC=local               | Match (rightmost sequence is "deeper,sales"), both OUs trimmed    |
+| OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| deeper,sales     | OU=foo,OU=bar,DC=domain,DC=local | Match (rightmost sequence), both OUs trimmed                      |
+| OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| bar,deeper       | [ unchanged ]                    | No match (rightmost OUs are "deeper,sales")                       |
 
 ---
 
