@@ -178,7 +178,7 @@ If password is absent for a user, the account will be created but remain disable
 # Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
 .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
 
-# Import users, trimming two leading OUs and placing directly under domain root (not in CN=Users)
+# Import users, trimming two rightmost OUs and placing directly under domain root (not in CN=Users)
 .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoUsersContainer
 
 # Import users, preserving DN structure (Users container or domain root) as-is
