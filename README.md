@@ -2,10 +2,12 @@
 
 ## Overview
 
-`export-ADData` is a PowerShell toolkit designed to export Active Directory (AD) Users and Groups to CSV files with flexible options.  
-`import-ADData` is the flagship script for importing AD Users and Groups from CSV files, supporting a variety of migration and reorganization scenarios, including cross-domain moves, OU flattening, and detailed mapping.  
-`compare-ADCSV` compares two AD export CSVs for verification.  
-`check-ADUserPassword` is a utility for checking AD user password validity.
+export-ADData is a flexible PowerShell toolkit for exporting and importing Active Directory users and groups. Easily convert AD data to CSV and back, with advanced import features for cross-domain migration, OU reorganization, granular mapping, and robust validation. Ideal for admins managing AD at scale.
+
+- **`export-ADData`**: Export Active Directory (AD) users and groups to CSV files with flexible options.
+- **`import-ADData`**: Import AD users and groups from CSV files, supporting migration, OU reorganization, cross-domain moves, flattening, and detailed mapping.
+- **`compare-ADCSV`**: Compare two AD export CSVs for verification.
+- **`check-ADUserPassword`**: Check AD user password validity.
 
 ---
 
