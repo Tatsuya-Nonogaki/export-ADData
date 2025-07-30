@@ -1,81 +1,106 @@
 <#
  .SYNOPSIS
   Imports users and groups into Active Directory.
- 
+
  .DESCRIPTION
   Imports users and groups into Active Directory from CSV files.
-  You can accomplish import of user only, group only, or both at a time.
-  Version: 0.8.6
- 
- .PARAMETER DNPath
-  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
-  Base of the Domain hierarchy onto which you want import objects. Its 
-  argument must be in DistinguishedName form like "DC=mydomain,DC=local" 
-  or "OU=sales,DC=mydomain,DC=local". This parameter is much preferable 
-  than its alternative -DNPrefix (below) for accuracy.
-  IMPORTANT: The target base DN object, e.g. OU, must exist on the 
-  destination AD prior to import.
- 
- .PARAMETER DNPrefix
-  (Alias -d) Alternative method to -DNPath, and mutually exclusive with it. 
-  Its argument must be in dotted format. For example: "unit.mydomain.local" 
-  which is converted internally to DistinguishedName(=DNPath) 
-  "OU=unit,DC=mydomain,DC=local".
- 
- .PARAMETER DCDepth
-  Optional. Can be used with -DNPrefix. Mutually exclusive with -DNPath. 
-  In calculation of the DNPath, we assume the last 2 elements are DC 
-  per default. If it is not what you expect, specify depth count of DC 
-  with this. e.g., when -DNPrefix dept.unit.mydomain.local, then 
-   DCDepth 2: DNPath becomes OU=dept,OU=unit,DC=mydomain,DC=local
-   DCDepth 3: DNPath becomes OU=dept,DC=unit,DC=mydomain,DC=local
- 
- .PARAMETER User
-  (Alias -u) Operates in user import mode. If -UserFile (below) is 
-  specified, this switch is implied and can be omitted.
- 
- .PARAMETER UserFile
-  (Alias -uf) Optional. Path of input user CSV file. File selection 
-  dialog will prompt you to choose, if omitted despite -User switch is set.
-  Note: If you want to register password to any users, make a copy of 
-  the whole CSV file, add "Password" column to it, which is missing from 
-  the original, and put password in plain text. Password is required to 
-  restore the "Enabled" flag of the account.
- 
- .PARAMETER Group
-  (Alias -g) Operates in group import mode. If -GroupFile (below) is 
-  specified, this switch is implied and can be omitted.
- 
- .PARAMETER GroupFile
-  (Alias -gf) Optional. Path of input group CSV file. File selection 
-  dialog will prompt you to choose, if omitted despite -Group switch 
-  is set.
- 
- .PARAMETER IncludeSystemObject
-  Optional. Import also users and groups which are critical system object, 
-  such as: Administrator(s), Domain Admins and trusted DOMAIN$. This is 
-  usually dangerous and leads to AD system breakdown.
- 
- .PARAMETER NewUPNSuffix
-  Optional. New UserPrincipalName suffix to use for conversion. If not 
-  provided, script will convert UPN based on DNPath. It is usually not 
-  necessary to specify.
- 
- .PARAMETER NoProtectNewOU
-  Optional. If specified, newly created OUs will not be protected from 
-  accidental deletion. By default, OUs will be created in protected state.
+  Supports advanced scenarios such as domain migration, OU reorganization, flattening 
+  OU hierarchies by trimming OUs, and more.
+  Automatically creates missing intermediate OUs as needed.
+  Special options allow for placing users/groups with no OU or in the 'Users' 
+  container directly under the domain root, or for importing objects as-is.
   
+  Version: 0.9.5
+
+ .PARAMETER DNPath
+  (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
+  The target base DN for import (e.g., "DC=mydomain,DC=local" or "OU=branch,DC=mydomain,DC=local").
+  Preferred over -DNPrefix for accuracy.
+  IMPORTANT: The base DN object must exist in the destination AD prior to import.
+
+ .PARAMETER DNPrefix
+  (Alias -d) Alternative to -DNPath. Mutually exclusive.
+  Dotted format (e.g., "unit.mydomain.local"), converted internally to DNPath.
+
+ .PARAMETER DCDepth
+  Optional. Used only with -DNPrefix. How many trailing elements are treated as DC 
+  components (default: 2).
+
+ .PARAMETER User
+  (Alias -u) Operates in user import mode. Implied if -UserFile is specified.
+
+ .PARAMETER UserFile
+  (Alias -uf) Path to user CSV file. 
+  If omitted with -User, a file selection dialog prompts you.
+
+  Note: To register password to any users, make a copy of the whole CSV file, 
+  add a "Password" column, and put password in plain text. Do note that Password 
+  is required to restore the "Enabled" flag of the account.
+
+ .PARAMETER Group
+  (Alias -g) Operates in group import mode. Implied if -GroupFile is specified.
+
+ .PARAMETER GroupFile
+  (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
+  dialog prompts you.
+
+ .PARAMETER NoClassCheck
+  By default, this script automatically checks that all records in the input file 
+  have an 'ObjectClass' matching the selected import mode (user or group), before 
+  importing anything. This switch disables the check, thus allowing you to import 
+  files that are missing the column, or that contain mixed or incorrect types.
+  Only use this if you know what you are doing.
+
+ .PARAMETER IncludeSystemObject
+  Optional. Import also critical system users/groups and trusted DOMAIN$ (normally 
+  dangerous for regular environments).
+
+ .PARAMETER NewUPNSuffix
+  Optional. Specify a new UserPrincipalName suffix for imported users. Defaults to 
+  value derived from -DNPath.
+
+ .PARAMETER NoProtectNewOU
+  Optional. If set, newly created OUs will not be protected from accidental deletion.
+
+  .PARAMETER TrimOU
+  Optional. The list of OU names is matched against the rightmost (nearest to domain 
+  root) OU components of each object's DN. If all components match in exact order, 
+  they are trimmed.
+  It accepts a comma-separated list of OU names (without 'OU=' prefix). Only plain 
+  OU names are allowed.
+  Reserved words (ou, cn, dc, users, =) are not permitted (case-insensitive match).
+  Always enclose multiple names in quotes, e.g. -TrimOU "deeper,sales".
+  For full details and examples, see the README.
+
+ .PARAMETER NoUsersContainer
+  Optional. Place users/groups with no OU, or in the 'Users' container, directly under 
+  the domain root (DC=...) instead of the default CN=Users container.
+  Mutually exclusive with -NoForceUsersContainer.
+
+ .PARAMETER NoForceUsersContainer
+  Optional. Import objects as their DN dictates: if the DN is directly under the 
+  domain root, import as is; if under Users container, import as is.
+  Mutually exclusive with -NoUsersContainer.
+
  .EXAMPLE
-  # Import AD Groups from CSV to a new Domain basis, excluding system objects
-  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile "C:\ADExport\Groups_mydomain_local.csv"
- 
+  # Import AD Groups from CSV to a new domain, excluding system objects
+  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile ".\Groups_olddomain_local.csv"
+
  .EXAMPLE
-  # Import AD Users from CSV to an OU on a Domain. A file selection dialog will pop-up to let you choose CSV.
-  .\import-ADData.ps1 -DNPath "OU=unit,DC=newdomain,DC=local" -User
- 
+  # Import AD Users from CSV to an OU on a domain, using a file dialog
+  .\import-ADData.ps1 -DNPath "OU=osaka,DC=newdomain,DC=local" -User
+
  .EXAMPLE
-  # Import AD Users and Groups at a time. Internally, users are processed after the whole groups, but this is not recommended because of potential massive errors due to group/user to groups membership dependency violation when any of groups were not successfully created.
-  .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile "C:\ADExport\Users_mydomain_local.csv" -GroupFile "C:\ADExport\Groups_mydomain_local.csv"
+  # Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
+
+ .EXAMPLE
+  # Import users, trimming OUs "deeper" and "sales" from the domain-root side.
+  # For example, if the source DN is:
+  #   CN=foo,OU=deeper,OU=sales,DC=olddomain,DC=local
+  # then -TrimOU "deeper,sales" will result in:
+  #   CN=foo,DC=domain,DC=local
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoUsersContainer
 #>
 [CmdletBinding()]
 param(
@@ -103,6 +128,9 @@ param(
     [switch]$Group,
 
     [Parameter()]
+    [switch]$NoClassCheck,
+
+    [Parameter()]
     [Alias("gf")]
     [string]$GroupFile,
 
@@ -113,7 +141,16 @@ param(
     [string]$NewUPNSuffix,
 
     [Parameter()]
-    [switch]$NoProtectNewOU
+    [switch]$NoProtectNewOU,
+
+    [Parameter()]
+    [string]$TrimOU,
+
+    [Parameter()]
+    [switch]$NoUsersContainer,
+
+    [Parameter()]
+    [switch]$NoForceUsersContainer
 )
 
 begin {
@@ -127,20 +164,18 @@ begin {
             [string]$Message
         )
         $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        "$Timestamp - $Message" | Out-File -Append -FilePath $LogFilePath
-    }
-
-    # Determine protection option for new OUs
-    if ($NoProtectNewOU) {
-        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $false }
-    } else {
-        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $true }
+        "$Timestamp - $Message" | Out-File -Append -FilePath $LogFilePath -Encoding UTF8
     }
 
     # Arguments validation
     if ($PSBoundParameters.Count -eq 0) {
         Get-Help $MyInvocation.InvocationName
         exit
+    }
+
+    # Mutually exclusive: NoUsersContainer and NoForceUsersContainer
+    if ($NoUsersContainer -and $NoForceUsersContainer) {
+        throw "Error: -NoUsersContainer and -NoForceUsersContainer are mutually exclusive. Please specify only one."
     }
 
     if (-not $PSBoundParameters.ContainsKey('DNPath')) {
@@ -156,9 +191,63 @@ begin {
         throw "Error: -DNPath cannot be used together with -DNPrefix or -DCDepth."
     }
 
-    if (-not ($PSBoundParameters.ContainsKey('User') -or $PSBoundParameters.ContainsKey('UserFile') -or `
-              $PSBoundParameters.ContainsKey('Group') -or $PSBoundParameters.ContainsKey('GroupFile'))) {
+    # User and Group related parameter checks
+    if ($PSBoundParameters.ContainsKey('UserFile')) { $User = $true }
+    if ($PSBoundParameters.ContainsKey('GroupFile')) { $Group = $true }
+
+    if (-not ($User -or $Group)) {
         throw "Error: At least one of -User, -UserFile, -Group, or -GroupFile must be specified."
+    }
+
+    if ($User -and $Group) {
+        throw "Error: You cannot specify both User mode (-User and/or -UserFile) and Group mode (-Group and/or -GroupFile) at the same time. Please specify only one."
+    }
+
+    if ($User -and $PSBoundParameters.ContainsKey('GroupFile')) {
+        throw "Error: Option mismatch: -GroupFile cannot be used with User mode (-User or -UserFile)."
+    }
+    if ($Group -and $PSBoundParameters.ContainsKey('UserFile')) {
+        throw "Error: Option mismatch: -UserFile cannot be used with Group mode (-Group or -GroupFile)."
+    }
+
+    # UPN suffix sanity check
+    if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
+        $upnPattern = '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
+        if ($NewUPNSuffix -eq '' -or $NewUPNSuffix -notmatch $upnPattern) {
+            $msg = "Error: -NewUPNSuffix must be a non-empty domain-style string (e.g. 'company.local', 'example.com'), containing only letters, digits, dots and hyphens, and have at least one dot."
+            Write-Host $msg -ForegroundColor Red
+            Write-Log $msg
+            throw $msg
+        }
+    }
+
+    # Determine protection option for new OUs
+    if ($NoProtectNewOU) {
+        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $false }
+    } else {
+        $newOUcommonOpts = @{ ProtectedFromAccidentalDeletion = $true }
+    }
+
+    # TrimOU parsing and validation
+    $TrimOUList = @()
+    if ($PSBoundParameters.ContainsKey('TrimOU')) {
+        $reservedWords = @('ou', 'cn', 'dc', 'users', '=')
+        $TrimOUList = $TrimOU -split ',' | ForEach-Object { $_.Trim() }
+        $trimCount = $TrimOUList.Count
+
+        if ($TrimOUList -and $trimCount -gt 0) {
+            $invalid = $TrimOUList | Where-Object {
+                ($_ -eq '') -or ($reservedWords -contains $_.ToLower()) -or ($_.Contains('='))
+            }
+
+            if ($invalid.Count -gt 0) {
+                $msg = "Error: -TrimOU may only contain valid OU names (no reserved words or empty values). Invalid entries: " + ($invalid -join ', ')
+                Write-Host $msg -ForegroundColor Red
+                Write-Log $msg
+                throw $msg
+            }
+          # Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
+        }
     }
 }
 
@@ -240,6 +329,39 @@ process {
         return $exists
     }
 
+    # Check if this records are of the expected class (i.e., user or group)
+    function Test-ObjectClassColumn {
+        param (
+            [array]$CsvRows,
+            [string]$ExpectClass,
+            [switch]$NoClassCheck
+        )
+
+        if ($NoClassCheck) { return } # Skip check if requested
+        if ($CsvRows.Count -eq 0) { return } # Nothing to check
+
+        # 1. Check column exists
+        if (-not ($CsvRows[0].PSObject.Properties.Name -contains 'ObjectClass')) {
+            throw "Error: The input file is missing the 'ObjectClass' column. To override this check, use -NoClassCheck."
+        }
+
+        # 2. Check all values match expected class
+        $mismatches = $CsvRows | Where-Object { $_.ObjectClass -ne $ExpectClass }
+        if ($mismatches.Count -gt 0) {
+            $firstFew = $mismatches | Select-Object -First 3
+            $sampleInfo = $firstFew | ForEach-Object { 
+                "sAMAccountName=$($_.sAMAccountName), ObjectClass=$($_.ObjectClass)"
+            }
+            $msg = @"
+Error: ObjectClass mismatch detected in input file. $($mismatches.Count) records do not match the expected class '$ExpectClass'.
+Showing first 3 mismatches:
+$($sampleInfo -join "`n")
+Review your CSV. To override this check, use -NoClassCheck.)
+"@
+            throw $msg
+        }
+    }
+
     # Convert old object DistinguishedName to new DN
     function Get-NewDN {
         param (
@@ -257,7 +379,6 @@ process {
         $ouPath = ConvertDNBase -oldDN $originalDN -newDNPath $DNPath
 
         if ($cnPart) {
-          # Write-Log "debug :: Get-NewDN : cnPart = $cnPart    ouPath = $ouPath"
             Write-Log "debug :: Get-NewDN : return ${cnPart},$ouPath"
             return "${cnPart},$ouPath"
         } else {
@@ -266,7 +387,7 @@ process {
         }
     }
 
-    # Return translated parent path of the given object and create required OUs if not exist
+    # Calculate new target DN to place the given DistinguishedName of the object on
     function ConvertDNBase {
         param (
             [string]$oldDN,
@@ -274,121 +395,114 @@ process {
             [switch]$CreateOUIfNotExists
         )
 
-        # Obtain leading OU part
-        $dnParts = $oldDN -split ","
-        $ouParts = $dnParts | Where-Object { $_ -match "^OU=" }
-        $newDNPathHasOU = if ($newDNPath -match '^OU=') { $true }
+        # --- 1. Parse and split original DN into arrays ---
+        $dnParts = $oldDN -split "," | ForEach-Object { $_.Trim() }
+        $cnPart = $dnParts | Where-Object { $_ -match "^CN=" }
+        $ouParts = @()
+        foreach ($part in $dnParts) {
+            if ($part -match "^OU=") {
+                $ouParts += $part
+            }
+        }
 
-        if ($ouParts) {
-            $importTargetOU = "$($ouParts -join ","),$newDNPath"
+        # --- 2. Remove the deepest OUs from ouParts array according to '-TrimOU' argument ---
+      # Write-Log "debug :: ConvertDNBase :: original oldDN: '$oldDN'"
+        Write-Log "debug :: ConvertDNBase :: original ouParts: $($ouParts -join '|')"
+        if ($ouParts.Count -gt 0 -and $ouParts[0].Length -le 2) {
+            Write-Log "Error: Detected malformed ouParts: $($ouParts -join '|')"
+            throw "TrimOU error: ouParts appears malformed (likely split into characters). Check your CSV DN format and delimiter."
+        }
 
-          # Write-Log "debug :: importTargetOU = $importTargetOU"
+        if ($TrimOUList -and $trimCount -gt 0) {
+            $ouNames = $ouParts | ForEach-Object { ($_ -replace '^OU=', '').Trim() }
+
+            if ($ouNames.Count -ge $trimCount) {
+                $ouNamesRev = @($ouNames)[-1..0]          # reversed order (rightmost first)
+                $TrimOUListRev = @($TrimOUList)[-1..0]    # reversed order (rightmost first)
+                $match = $true
+                for ($i = 0; $i -lt $trimCount; $i++) {
+                    if ($ouNamesRev[$i].ToString().ToLower() -ne $TrimOUListRev[$i].ToString().ToLower()) {
+                        $match = $false
+                        break
+                    }
+                }
+                if ($match) {
+                    # Remove the last $trimCount elements (rightmost OUs), but if nothing remains, set to empty array
+                    if ($ouParts.Count - $trimCount - 1 -ge 0) {
+                        $ouParts = $ouParts[0..($ouParts.Count - $trimCount - 1)]
+                    } else {
+                        $ouParts = @()
+                    }
+                }
+            }
+            Write-Log "debug :: ConvertDNBase :: ouParts after TrimOU: $($ouParts -join ',')"
+        }
+
+        # --- 3. Compose the new DN path ---
+        $hasOUs = $ouParts.Count -gt 0
+        $baseDC = $newDNPath -replace '^(OU=[^,]+,)*', ''
+
+        # --- 3-A. In case any OUs remain ---
+        if ($hasOUs) {
+            $importTargetOU = ($ouParts -join ',') + "," + $newDNPath
+
+            # Optionally create OUs if requested
             if ($CreateOUIfNotExists) {
-                $ouList = $importTargetOU -split ",\s*" | Where-Object { $_ -match "^OU=" }
+                $ouList = $ouParts
                 [array]::Reverse($ouList)
-                $previousOUBase = ""
+                $previousOUBase = $newDNPath
 
-                # Create parent OUs from parent to child
                 foreach ($ou in $ouList) {
                     $ou = $ou.Trim()
-                  # Write-Log "debug :: processing ou = $ou"
+                  # Write-Log "debug :: processing ou: $ou"
                     $ouName = $ou -replace "^OU=", ""
-
-                    if ($previousOUBase) {
-                        $currentOUBase = $previousOUBase
-                    } else {
-                        # Remove preceding non-DC components from DNPath
-                        $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
-                    }
-
-                  # Write-Log "debug :: currentOUBase = $currentOUBase"
-
-                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
-                        Write-Log "Creating required OU: ${ou},$currentOUBase"
+                    # Check if OU exists, create if not
+                    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$previousOUBase'" -ErrorAction SilentlyContinue)) {
+                        Write-Log "Creating required OU: ${ou},$previousOUBase"
                         try {
-                            if (($currentOUBase -eq $newDNPath) -and -not $newDNPathHasOU) {
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
-                            } else {
-                                Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
-                            }
-
-                            Write-Host "OU Created: ${ou},$currentOUBase"
-                            Write-Log "OU Created: ${ou},$currentOUBase"
+                            Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $previousOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
+                            New-ADOrganizationalUnit -Name $ouName -Path $previousOUBase @newOUcommonOpts -ErrorAction Stop
+                            Write-Host "OU Created: ${ou},$previousOUBase"
+                            Write-Log "OU Created: ${ou},$previousOUBase"
                         } catch {
-                            Write-Error "Failed to create OU ${ou},$currentOUBase"
-                            Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
+                            Write-Error "Failed to create OU ${ou},$previousOUBase"
+                            Write-Log "Failed to create OU: ${ou},$previousOUBase - $_"
                         }
                     }
-                   #else {
-                   #    Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
-                   #}
-                    $previousOUBase = "OU=${ouName},$currentOUBase"
+                    $previousOUBase = "${ou},$previousOUBase"
                 }
             }
             return $importTargetOU
         }
-        elseif ($oldDN -match "^CN=.*?,CN=Users,DC=") {
-            if ($newDNPathHasOU) {
-                # Place directly under the specified DNPath without intermediate CN=Users
-                $importTargetOU = $newDNPath
-                Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
 
-                if ($CreateOUIfNotExists) {
-                    $ouList = $newDNPath -split ",\s*" | Where-Object { $_ -match "^OU=" }
-                    [array]::Reverse($ouList)
-                    $previousOUBase = ""
+        # --- 3-B. In case no OUs remain: only CN and DC ---
+        $isUsersContainer = $oldDN -match "^CN=.*?,CN=Users,DC="
+        $importBaseHasOU = $newDNPath -match '^OU='
 
-                    foreach ($ou in $ouList) {
-                        $ou = $ou.Trim()
-                      # Write-Log "debug :: processing ou = $ou"
-                        $ouName = $ou -replace "^OU=", ""
-
-                        if ($previousOUBase) {
-                            $currentOUBase = $previousOUBase
-                        } else {
-                            # Remove preceding non-DC components from DNPath
-                            $currentOUBase = $newDNPath -replace '^(OU=[^,]+,)*', ''
-                        }
-
-                      # Write-Log "debug :: currentOUBase = $currentOUBase"
-
-                        if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$currentOUBase'" -ErrorAction SilentlyContinue)) {
-                            Write-Log "Creating required OU: ${ou},$currentOUBase"
-                            try {
-                                if ($currentOUBase -eq $newDNPath) {
-                                    Write-Log "New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                    New-ADOrganizationalUnit -Name $ouName @newOUcommonOpts -ErrorAction Stop
-                                } else {
-                                    Write-Log "New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts (ProtectedFromAccidentalDeletion=$($newOUcommonOpts.ProtectedFromAccidentalDeletion))"
-                                    New-ADOrganizationalUnit -Name $ouName -Path $currentOUBase @newOUcommonOpts -ErrorAction Stop
-                                }
-
-                                Write-Host "OU Created: ${ou},$currentOUBase"
-                                Write-Log "OU Created: ${ou},$currentOUBase"
-                            } catch {
-                                Write-Error "Failed to create OU ${ou},$currentOUBase"
-                                Write-Log "Failed to create OU: ${ou},$currentOUBase - $_"
-                            }
-                        }
-                       #else {
-                       #    Write-Log "debug :: OU: DistinguishedName=${ou},$currentOUBase already exists, skipping creation"
-                       #}
-                        $previousOUBase = "OU=${ouName},$currentOUBase"
-                    }
+        if ($NoUsersContainer) {
+            # Always place at domain base (strip Users container)
+            return $newDNPath
+        }
+        elseif ($NoForceUsersContainer) {
+            # Place as-is: if Users container, keep; else domain base
+            if ($isUsersContainer) {
+                # If import base has OU, ignore CN=Users (place in OU); else, keep Users container
+                if ($importBaseHasOU) {
+                    return $newDNPath
+                } else {
+                    return "CN=Users," + $baseDC
                 }
-                return $importTargetOU
             } else {
-                $importTargetOU = "CN=Users," + ($newDNPath -replace '^(OU=[^,]+,)*', '')
-                Write-Log "Redirected CN=Users object: $oldDN to: $importTargetOU"
-                return $importTargetOU
+                return $newDNPath
             }
         }
         else {
-            Write-Host "No OU found in DN: $oldDN. Assigning default path: $newDNPath" -ForegroundColor Yellow
-            Write-Log "No OU found in DN: $oldDN. Assigning default path: $newDNPath"
-            return $newDNPath
+            # Default: If import base has OU, place in that OU; else, in CN=Users
+            if ($importBaseHasOU) {
+                return $newDNPath
+            } else {
+                return "CN=Users," + $baseDC
+            }
         }
     }
 
@@ -402,9 +516,7 @@ process {
         if ($objectClass -eq "user") {
             $excludedUsers = @("SUPPORT_388945a0")
 
-            Import-Csv -Path $filePath | 
-              Where-Object {
-                # Exclude system user objects
+            $users = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
                 } else {
@@ -416,185 +528,188 @@ process {
                         return $true
                     }
                 }
-              } | 
-                ForEach-Object {
-                    $objectProps = $_
-                    $sAMAccountName = $_.sAMAccountName
+            }
 
-                    # Check existence of the user
-                    $userExists = Get-ADUser -Filter "SamAccountName -eq '$sAMAccountName'" -ErrorAction SilentlyContinue
+            # Ensure this records are of AD Users
+            Test-ObjectClassColumn -CsvRows $users -ExpectClass 'user' -NoClassCheck:$NoClassCheck
 
-                    if (-not $userExists) {
-                        # Construct parameters for New-ADUser
-                        Write-Host "Processing user sAMAccountName=`"$sAMAccountName`""
-                        Write-Log "Processing user sAMAccountName=`"$sAMAccountName`""
+            foreach ($usr in $users) {
+                $sAMAccountName = $usr.sAMAccountName
 
-                        $ouPath = ConvertDNBase -oldDN $_.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
-                        $managerDN = if ($_.Manager -ne "") { Get-NewDN -originalDN $_.Manager -DNPath $DNPath } else { $null }
+                # Check existence of the user
+                $userExists = Get-ADUser -Filter "SamAccountName -eq '$sAMAccountName'" -ErrorAction SilentlyContinue
 
-                        $newUserParams = @{
-                            Name           = $_.Name
-                            DisplayName    = $_.DisplayName
-                            SamAccountName = $sAMAccountName
-                            Description    = $_.Description
-                            GivenName      = $_.GivenName
-                            Surname        = $_.Surname
-                            Manager        = $managerDN
-                        }
+                if (-not $userExists) {
+                    # Construct parameters for New-ADUser
+                    Write-Host "Processing user sAMAccountName=`"$sAMAccountName`""
+                    Write-Log "Processing user sAMAccountName=`"$sAMAccountName`""
 
-                        Try {
-                            if ($ouPath -match '^CN=Users,DC=') {
-                                New-ADUser @newUserParams -ErrorAction Stop
-                                Write-Log "New-ADUser `@newUserParams"
-                            } else {
-                                New-ADUser @newUserParams -Path $ouPath -ErrorAction Stop
-                                Write-Log "New-ADUser `@newUserParams -Path $ouPath"
-                            }
-                        } Catch {
-                            Write-Error "Failed to create user ${sAMAccountName}: $_"
-                            Write-Log "Failed to create user: sAMAccountName=$sAMAccountName - $_"
-                        }
+                    $ouPath = ConvertDNBase -oldDN $usr.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
+                    $managerDN = if ($usr.Manager -ne "") { Get-NewDN -originalDN $usr.Manager -DNPath $DNPath } else { $null }
 
-                        $createdUser = Get-ADUser -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
-                        if ($createdUser) {
-                            Write-Host "User Created DistinguishedName=$($createdUser.DistinguishedName)"
-                            Write-Log "User Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdUser.DistinguishedName)"
-                        }
-
-                        # Set additional properties using Set-ADUser
-                        $additionalProperties = @{
-                            ProfilePath      = $_.ProfilePath
-                            ScriptPath       = $_.ScriptPath
-                            Company          = $_.Company
-                            Department       = $_.Department
-                            Title            = $_.Title
-                            Office           = $_.Office
-                            OfficePhone      = $_.OfficePhone
-                            EmailAddress     = $_.EmailAddress
-                            StreetAddress    = $_.StreetAddress
-                            City             = $_.City
-                            State            = $_.State
-                            Country          = $_.Country
-                            PostalCode       = $_.PostalCode
-                            MobilePhone      = $_.MobilePhone
-                            HomePhone        = $_.HomePhone
-                            Fax              = $_.Fax
-                            Pager            = $_.Pager
-                        }
-
-                        foreach ($property in $additionalProperties.Keys) {
-                            if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
-                                $params = @{
-                                    Identity = $sAMAccountName
-                                }
-                                $params[$property] = $additionalProperties[$property]
-                                Try {
-                                    Set-ADUser @params
-                                    Write-Host "  => Property $property set for user: $sAMAccountName"
-                                    Write-Log "Property $property set for user: sAMAccountName=$sAMAccountName"
-                                } Catch {
-                                    Write-Host "Warning: Failed to set property $property for user ${sAMAccountName}" -ForegroundColor Yellow
-                                    Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName - $_"
-                                }
-                            }
-                        }
-
-                        if ($_.UserPrincipalName -ne "") {
-                            # Convert UserPrincipalName to new suffix
-                            $upnParts = $_.UserPrincipalName -split "@"
-                            $upnPrefix = $upnParts[0]
-                            if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
-                                $upnSuffix =  $NewUPNSuffix
-                            } else {
-                                $upnSuffix = $DNPath -replace '^(OU=[^,]+,)*', '' -replace 'DC=', '' -replace ',', '.'
-                            }
-                            $newUserPrincipalName = "${upnPrefix}@${upnSuffix}"
-
-                            try {
-                                Set-ADUser -Identity $sAMAccountName -UserPrincipalName $newUserPrincipalName
-                                Write-Host "  => UserPrincipalName set for user: $sAMAccountName"
-                                Write-Log "UserPrincipalName `"$newUserPrincipalName`" set for user: sAMAccountName=$sAMAccountName"
-                            } catch {
-                                Write-Host "Warning: Failed to set UserPrincipalName for user ${sAMAccountName}" -ForegroundColor Yellow
-                                Write-Log "Failed to set UserPrincipalName `"$newUserPrincipalName`" for user: sAMAccountName=$sAMAccountName - $_"
-                            }
-                        }
-
-                        # Set password if the CSV provides Password
-                        if ($_.PSObject.Properties.Name -contains "Password" -and $_.Password -ne "") {
-                            try {
-                                $securePassword = ConvertTo-SecureString -String $_.Password -AsPlainText -Force
-                                Set-ADAccountPassword -Identity $sAMAccountName -NewPassword $securePassword -Reset
-                                Write-Host "  => Password set for user: $sAMAccountName"
-                                Write-Log "Password set for user: sAMAccountName=$sAMAccountName"
-                            } catch {
-                                Write-Error "Failed to set password for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set password for user: sAMAccountName=$sAMAccountName - $_"
-                            }
-                        }
-
-                        # Set "userAccountControl" property related special control bits
-                        try {
-                            $userFlags = [int]$_.userAccountControl
-
-                            if ($userFlags -band 0x80000) {                  # MustChangePassword
-                                Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
-                                Write-Host "  => MustChangePassword applied: ${sAMAccountName}"
-                                Write-Log "MustChangePassword applied: sAMAccountName=${sAMAccountName}"
-                            }
-                            if ($userFlags -band 0x40) {                     # CannotChangePassword
-                                $user = Get-ADUser -Identity $sAMAccountName
-                                Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $_.Access | Where-Object { $_.ObjectType -eq [Guid]::Parse("4c164200-20c0-11d0-a768-00aa006e0529") -and $_.ActiveDirectoryRights -eq "ExtendedRight" -and $_.AccessControlType -eq "Deny" } })
-                                Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
-                                Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
-                            }
-                            if ($userFlags -band 0x10000) {                  # PasswordNeverExpires
-                                Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                                Write-Host "  => PasswordNeverExpires applied: ${sAMAccountName}"
-                                Write-Log "PasswordNeverExpires applied: sAMAccountName=${sAMAccountName}"
-                            }
-
-                            # Enable or disable the account only if the password is set
-                            if ($userFlags -band 2) {
-                                Disable-ADAccount -Identity $sAMAccountName
-                                Write-Host "  => Account disabled: ${sAMAccountName}"
-                                Write-Log "Account disabled: sAMAccountName=${sAMAccountName}"
-                            } else {
-                                if ($_.PSObject.Properties.Name -contains "Password" -and $_.Password -ne "") {
-                                    Enable-ADAccount -Identity $sAMAccountName
-                                    Write-Host "  => Account enabled: ${sAMAccountName}"
-                                    Write-Log "Account enabled: sAMAccountName=${sAMAccountName}"
-                                } else {
-                                    Write-Host "Warning: Cannot enable account ${sAMAccountName} as no password is set" -ForegroundColor Yellow
-                                    Write-Log "Cannot enable account ${sAMAccountName} as no password is set"
-                                }
-                            }
-                        } catch {
-                            Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
-                        }
-
-                        # Add this user to groups
-                        $memberOfGroups = $_.MemberOf -split ';'
-                        foreach ($group in $memberOfGroups) {
-                            if ($group -ne "") {
-                                try {
-                                    $newDN = Get-NewDN -originalDN $group -DNPath $DNPath
-
-                                    Add-ADGroupMember -Identity $newDN -Members $($createdUser.DistinguishedName)
-                                    Write-Host "Added user $sAMAccountName to group: $newDN"
-                                    Write-Log "User: sAMAccountName=$sAMAccountName added to group: $newDN"
-                                } catch {
-                                    Write-Host "Failed to add user $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
-                                    Write-Log "Failed to add user sAMAccountName=$sAMAccountName to group: $newDN - $_"
-                                }
-                            }
-                        }
-                    } else {
-                        Write-Host "User $sAMAccountName already exists; skipping import"
-                        Write-Log "User Skipped (Already Exists): sAMAccountName=$sAMAccountName"
+                    $newUserParams = @{
+                        Name           = $usr.Name
+                        DisplayName    = $usr.DisplayName
+                        SamAccountName = $sAMAccountName
+                        Description    = $usr.Description
+                        GivenName      = $usr.GivenName
+                        Surname        = $usr.Surname
+                        Manager        = $managerDN
                     }
+
+                    Try {
+                        if ($ouPath -match '^CN=Users,DC=') {
+                            New-ADUser @newUserParams -ErrorAction Stop
+                            Write-Log "New-ADUser `@newUserParams"
+                        } else {
+                            New-ADUser @newUserParams -Path $ouPath -ErrorAction Stop
+                            Write-Log "New-ADUser `@newUserParams -Path $ouPath"
+                        }
+                    } Catch {
+                        Write-Error "Failed to create user ${sAMAccountName}: $_"
+                        Write-Log "Failed to create user: sAMAccountName=$sAMAccountName - $_"
+                    }
+
+                    $createdUser = Get-ADUser -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
+                    if ($createdUser) {
+                        Write-Host "User Created DistinguishedName=$($createdUser.DistinguishedName)"
+                        Write-Log "User Created: sAMAccountName=$sAMAccountName, DistinguishedName=$($createdUser.DistinguishedName)"
+                    }
+
+                    # Set additional properties using Set-ADUser
+                    $additionalProperties = @{
+                        ProfilePath      = $usr.ProfilePath
+                        ScriptPath       = $usr.ScriptPath
+                        Company          = $usr.Company
+                        Department       = $usr.Department
+                        Title            = $usr.Title
+                        Office           = $usr.Office
+                        OfficePhone      = $usr.OfficePhone
+                        EmailAddress     = $usr.EmailAddress
+                        StreetAddress    = $usr.StreetAddress
+                        City             = $usr.City
+                        State            = $usr.State
+                        Country          = $usr.Country
+                        PostalCode       = $usr.PostalCode
+                        MobilePhone      = $usr.MobilePhone
+                        HomePhone        = $usr.HomePhone
+                        Fax              = $usr.Fax
+                        Pager            = $usr.Pager
+                    }
+
+                    foreach ($property in $additionalProperties.Keys) {
+                        if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
+                            $params = @{
+                                Identity = $sAMAccountName
+                            }
+                            $params[$property] = $additionalProperties[$property]
+                            Try {
+                                Set-ADUser @params
+                                Write-Host "  => Property $property set for user: $sAMAccountName"
+                                Write-Log "Property $property set for user: sAMAccountName=$sAMAccountName"
+                            } Catch {
+                                Write-Host "Warning: Failed to set property $property for user ${sAMAccountName}" -ForegroundColor Yellow
+                                Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName - $_"
+                            }
+                        }
+                    }
+
+                    if ($usr.UserPrincipalName -ne "") {
+                        # Convert UserPrincipalName to new suffix
+                        $upnParts = $usr.UserPrincipalName -split "@"
+                        $upnPrefix = $upnParts[0]
+                        if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
+                            $upnSuffix =  $NewUPNSuffix
+                        } else {
+                            $upnSuffix = $DNPath -replace '^(OU=[^,]+,)*', '' -replace 'DC=', '' -replace ',', '.'
+                        }
+                        $newUserPrincipalName = "${upnPrefix}@${upnSuffix}"
+
+                        try {
+                            Set-ADUser -Identity $sAMAccountName -UserPrincipalName $newUserPrincipalName
+                            Write-Host "  => UserPrincipalName set for user: $sAMAccountName"
+                            Write-Log "UserPrincipalName `"$newUserPrincipalName`" set for user: sAMAccountName=$sAMAccountName"
+                        } catch {
+                            Write-Host "Warning: Failed to set UserPrincipalName for user ${sAMAccountName}" -ForegroundColor Yellow
+                            Write-Log "Failed to set UserPrincipalName `"$newUserPrincipalName`" for user: sAMAccountName=$sAMAccountName - $_"
+                        }
+                    }
+
+                    # Set password if the CSV provides Password
+                    if ($usr.PSObject.Properties.Name -contains "Password" -and $usr.Password -ne "") {
+                        try {
+                            $securePassword = ConvertTo-SecureString -String $usr.Password -AsPlainText -Force
+                            Set-ADAccountPassword -Identity $sAMAccountName -NewPassword $securePassword -Reset
+                            Write-Host "  => Password set for user: $sAMAccountName"
+                            Write-Log "Password set for user: sAMAccountName=$sAMAccountName"
+                        } catch {
+                            Write-Error "Failed to set password for user ${sAMAccountName}: $_"
+                            Write-Log "Failed to set password for user: sAMAccountName=$sAMAccountName - $_"
+                        }
+                    }
+
+                    # Set "userAccountControl" property related special control bits
+                    try {
+                        $userFlags = [int]$usr.userAccountControl
+
+                        if ($userFlags -band 0x80000) {                  # MustChangePassword
+                            Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
+                            Write-Host "  => MustChangePassword applied: ${sAMAccountName}"
+                            Write-Log "MustChangePassword applied: sAMAccountName=${sAMAccountName}"
+                        }
+                        if ($userFlags -band 0x40) {                     # CannotChangePassword
+                            $user = Get-ADUser -Identity $sAMAccountName
+                            Set-ACL -Path "AD:\$($user.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($user.DistinguishedName)" | ForEach-Object { $usr.Access | Where-Object { $usr.ObjectType -eq [Guid]::Parse("4c164200-20c0-11d0-a768-00aa006e0529") -and $usr.ActiveDirectoryRights -eq "ExtendedRight" -and $usr.AccessControlType -eq "Deny" } })
+                            Write-Host "  => CannotChangePassword applied: ${sAMAccountName}"
+                            Write-Log "CannotChangePassword applied: sAMAccountName=${sAMAccountName}"
+                        }
+                        if ($userFlags -band 0x10000) {                  # PasswordNeverExpires
+                            Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
+                            Write-Host "  => PasswordNeverExpires applied: ${sAMAccountName}"
+                            Write-Log "PasswordNeverExpires applied: sAMAccountName=${sAMAccountName}"
+                        }
+
+                        # Enable or disable the account only if the password is set
+                        if ($userFlags -band 2) {
+                            Disable-ADAccount -Identity $sAMAccountName
+                            Write-Host "  => Account disabled: ${sAMAccountName}"
+                            Write-Log "Account disabled: sAMAccountName=${sAMAccountName}"
+                        } else {
+                            if ($usr.PSObject.Properties.Name -contains "Password" -and $usr.Password -ne "") {
+                                Enable-ADAccount -Identity $sAMAccountName
+                                Write-Host "  => Account enabled: ${sAMAccountName}"
+                                Write-Log "Account enabled: sAMAccountName=${sAMAccountName}"
+                            } else {
+                                Write-Host "Warning: Cannot enable account ${sAMAccountName} as no password is set" -ForegroundColor Yellow
+                                Write-Log "Cannot enable account ${sAMAccountName} as no password is set"
+                            }
+                        }
+                    } catch {
+                        Write-Error "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
+                        Write-Log "Failed to set userAccountControl flags for user ${sAMAccountName}: $_"
+                    }
+
+                    # Add this user to groups
+                    $memberOfGroups = $usr.MemberOf -split ';'
+                    foreach ($mgrp in $memberOfGroups) {
+                        if ($mgrp -ne "") {
+                            try {
+                                $newDN = Get-NewDN -originalDN $mgrp -DNPath $DNPath
+
+                                Add-ADGroupMember -Identity $newDN -Members $($createdUser.DistinguishedName)
+                                Write-Host "Added user $sAMAccountName to group: $newDN"
+                                Write-Log "User: sAMAccountName=$sAMAccountName added to group: $newDN"
+                            } catch {
+                                Write-Host "Failed to add user $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
+                                Write-Log "Failed to add user sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                            }
+                        }
+                    }
+                } else {
+                    Write-Host "User $sAMAccountName already exists; skipping import"
+                    Write-Log "User Skipped (Already Exists): sAMAccountName=$sAMAccountName"
                 }
+            }
 
         } elseif ($objectClass -eq "group") {
             $excludedGroups = @("DnsAdmins", "DnsUpdateProxy", "HelpServicesGroup", "TelnetClients", "WINS Users",
@@ -618,9 +733,11 @@ process {
                         }
                       } | Sort-Object { $_.MemberOf.Length }
 
-            foreach ($group in $groups) {
-                $objectProps = $group
-                $sAMAccountName = $group.sAMAccountName
+            # Ensure this records are of AD Groups
+            Test-ObjectClassColumn -CsvRows $groups -ExpectClass 'group' -NoClassCheck:$NoClassCheck
+
+            foreach ($grp in $groups) {
+                $sAMAccountName = $grp.sAMAccountName
 
                 # Check existence of the group
                 $groupExists = Get-ADGroup -Filter "SamAccountName -eq '$sAMAccountName'" -ErrorAction SilentlyContinue
@@ -630,13 +747,13 @@ process {
                     Write-Host "Processing group sAMAccountName=`"$sAMAccountName`""
                     Write-Log "Processing group sAMAccountName=`"$sAMAccountName`""
 
-                    $ouPath = ConvertDNBase -oldDN $group.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
-                    $NewManagedBy = Get-NewDN -originalDN $group.ManagedBy -DNPath $DNPath
+                    $ouPath = ConvertDNBase -oldDN $grp.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
+                    $NewManagedBy = Get-NewDN -originalDN $grp.ManagedBy -DNPath $DNPath
 
                     $newGroupParams = @{
-                        Name           = $group.Name    # or $group.CN
+                        Name           = $grp.Name    # or $grp.CN
                         SamAccountName = $sAMAccountName
-                        Description    = $group.Description
+                        Description    = $grp.Description
                         # ManagedBy    = $NewManagedBy   # produces error when DN missing on new AD
                         GroupCategory  = "Security" # modified later if necessary
                         GroupScope     = "Global"   # modified later if necessary
@@ -644,18 +761,18 @@ process {
                     }
 
                     # Determine GroupCategory based on CSV values
-                    if ($group.groupType -band 0x80000000) {
+                    if ($grp.groupType -band 0x80000000) {
                         $newGroupParams.GroupCategory = "Security"
                     } else {
                         $newGroupParams.GroupCategory = "Distribution"
                     }
 
                     # Determine GroupScope based on CSV values
-                    if ($group.groupType -band 0x2) {
+                    if ($grp.groupType -band 0x2) {
                         $newGroupParams.GroupScope = "Global"
-                    } elseif ($group.groupType -band 0x4) {
+                    } elseif ($grp.groupType -band 0x4) {
                         $newGroupParams.GroupScope = "DomainLocal"
-                    } elseif ($group.groupType -band 0x8) {
+                    } elseif ($grp.groupType -band 0x8) {
                         $newGroupParams.GroupScope = "Universal"
                     }
 
@@ -679,7 +796,7 @@ process {
                     }
 
                     # Add this group to parent groups
-                    $memberOfGroups = $group.MemberOf -split ';'
+                    $memberOfGroups = $grp.MemberOf -split ';'
                     foreach ($parentGroup in $memberOfGroups) {
                         if ($parentGroup -ne "") {
                             try {
@@ -728,8 +845,27 @@ process {
     Write-Host "Target DN Path: $DNPath"
     Write-Log "Target DN Path: $DNPath"
 
+    if ($PSBoundParameters.ContainsKey('TrimOU') -and $TrimOUList.Count -gt 0) {
+        $trimMsg = "Option: 'TrimOU' specified: " + ($TrimOUList -join ', ')
+        Write-Host $trimMsg
+        Write-Log $trimMsg
+    }
+    if ($NoUsersContainer) {
+        Write-Host "Option: 'NoUsersContainer' enabled"
+        Write-Log  "Option: 'NoUsersContainer' enabled"
+    }
+    if ($NoForceUsersContainer) {
+        Write-Host "Option: 'NoForceUsersContainer' enabled"
+        Write-Log  "Option: 'NoForceUsersContainer' enabled"
+    }
+    if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
+        $upnMsg = "Option: 'NewUPNSuffix' specified: $NewUPNSuffix"
+        Write-Host $upnMsg
+        Write-Log $upnMsg
+    }
+
     # Group data import
-    if ($Group -or $GroupFile) {
+    if ($Group) {
         # Select the group file if not specified
         if (-not $GroupFile) {
             $GroupFile = Select-Input-File -type "group"
@@ -738,13 +874,25 @@ process {
             Write-Error "Specified GroupFile does not exist"
             exit 1
         }
+
+        # Warn if looks like a user file
+        $groupFileName = Split-Path $GroupFile -Leaf
+        if ($groupFileName -match '(?i)(^|[._ -])user([._ -]|s|$)') {
+            Write-Host "Warning: The group file name implies it is a user data file." -ForegroundColor Yellow
+            $resp = Read-Host "Continue anyway? [Y]/N"
+            if ($resp -and $resp -match '^(n|no)$') {
+                Write-Host "Aborted by user." -ForegroundColor Yellow
+                exit 1
+            }
+        }
+
         Write-Host "Group File Path: $GroupFile"
         Write-Log "Group File Path: $GroupFile"
         Import-ADObject -filePath $GroupFile -objectClass "group"
     }
 
     # User data import
-    if ($User -or $UserFile) {
+    if ($User) {
         # Select the user file if not specified
         if (-not $UserFile) {
             $UserFile = Select-Input-File -type "user"
@@ -753,6 +901,18 @@ process {
             Write-Error "Specified UserFile does not exist"
             exit 1
         }
+
+        # Warn if looks like a group file
+        $userFileName = Split-Path $UserFile -Leaf
+        if ($userFileName -match '(?i)(^|[._ -])group([._ -]|s|$)') {
+            Write-Host "Warning: The user file name implies it is a group data file." -ForegroundColor Yellow
+            $resp = Read-Host "Continue anyway? [Y]/N"
+            if ($resp -and $resp -match '^(n|no)$') {
+                Write-Host "Aborted by user." -ForegroundColor Yellow
+                exit 1
+            }
+        }
+
         Write-Host "User File Path: $UserFile"
         Write-Log "User File Path: $UserFile"
         Import-ADObject -filePath $UserFile -objectClass "user"
