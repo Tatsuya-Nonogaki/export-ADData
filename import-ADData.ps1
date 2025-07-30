@@ -16,7 +16,9 @@
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
   The target base DN for import (e.g., "DC=mydomain,DC=local" or "OU=branch,DC=mydomain,DC=local").
   Preferred over -DNPrefix for accuracy.
-  IMPORTANT: The base DN object must exist in the destination AD prior to import.
+  IMPORTANT: The base DN object (e.g., the specified OU or domain root) must exist 
+  in the destination AD prior to import. This script does NOT create the *base* OU 
+  specified in -DNPath; it will only create sub-OUs as needed.
 
  .PARAMETER DNPrefix
   (Alias -d) Alternative to -DNPath. Mutually exclusive.
@@ -89,6 +91,7 @@
  .EXAMPLE
   # Import AD Users from CSV to an OU on a domain, using a file dialog
   .\import-ADData.ps1 -DNPath "OU=osaka,DC=newdomain,DC=local" -User
+  # NOTE: You must create the *base* OU "osaka" in the destination AD before running the import, if it does not already exist.
 
  .EXAMPLE
   # Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
