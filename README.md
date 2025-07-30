@@ -93,7 +93,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 | Parameter                 | Alias   | Required | Description                                                                                           |
 |---------------------------|---------|----------|-------------------------------------------------------------------------------------------------------|
-| `-DNPath`                 | `-p`    | Yes\*    | Target base DN for import (e.g., `DC=newdomain,DC=local` or `OU=sales,DC=newdomain,DC=local`).        |
+| `-DNPath`                 | `-p`    | Yes\*    | Target base DN for import (e.g., `DC=newdomain,DC=local` or `OU=sales,DC=newdomain,DC=local`). **The base DN object (OU or domain root) must already exist; this script does NOT create the base OU.**  |
 | `-DNPrefix`               | `-d`    | Yes\*    | Alternative to `-DNPath`. Dotted format (e.g., `unit.domain.local`).                                  |
 | `-DCDepth`                |         | No       | Depth of DC components in `-DNPrefix` (default: 2).                                                   |
 | `-User`                   | `-u`    | No       | Import mode for users. Implied if `-UserFile` specified.                                              |
@@ -178,6 +178,7 @@ If password is absent for a user, the account will be created but remain disable
 
 # Import AD Users from CSV to an OU on a domain, using a file dialog
 .\import-ADData.ps1 -DNPath "OU=osaka,DC=newdomain,DC=local" -User
+# NOTE: You must create the **base** OU "osaka" in the destination AD before running the import, if it does not already exist.
 
 # Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
 .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
