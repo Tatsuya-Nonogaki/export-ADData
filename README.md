@@ -85,6 +85,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 - Option to disable "protect from accidental deletion" for newly created OUs, useful for pre-validation etc.
 - Supports registering user passwords if provided in the CSV.
 - Advanced features for OU trimming and control over Users container placement (`-TrimOU`, `-NoUsersContainer`, `-NoForceUsersContainer`).
+- Mode vs file mismatch detection: Warns and prompts if the selected CSV file suggests a mismatch with the chosen import mode (e.g., a group import with a user data file), helping avoid accidental mis-imports. Contents check can be bypassed with `-NoClassCheck` switch for more flexible or advanced import scenarios.
 
 #### Parameters
 
@@ -97,6 +98,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 | `-UserFile`               | `-uf`   | No       | Path to user CSV file. Dialog prompts if omitted and `-User` is set.                                  |
 | `-Group`                  | `-g`    | No       | Import mode for groups. Implied if `-GroupFile` specified.                                            |
 | `-GroupFile`              | `-gf`   | No       | Path to group CSV file. Dialog prompts if omitted and `-Group` is set.                                |
+| `-NoClassCheck`           |         | No       | Disables automatic checking of the CSV's ObjectClass column for consistency with the selected import mode (user or group). Use with caution. |
 | `-IncludeSystemObject`    |         | No       | Import critical system users/groups (normally dangerous).                                             |
 | `-NewUPNSuffix`           |         | No       | New suffix for UserPrincipalName. Defaults to value derived from `-DNPath`.                           |
 | `-NoProtectNewOU`         |         | No       | Newly created OUs will not be protected from accidental deletion.                                     |
