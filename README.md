@@ -29,6 +29,8 @@ When importing, four major strategies are expected:
 4. **Export specifying "OU=sales,DC=domain,DC=local" and import to "DC=domain,DC=local" with `-TrimOU sales`**  
    Useful for flattening part of the OU hierarchy. By exporting from a specific OU and importing to the domain root with `-TrimOU`, you can migrate only the objects under that OU directly to the root (or another OU), effectively removing their original OU nesting.
 
+> See [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) for a step-by-step guide on preparing CSV files for import/export.
+
 ---
 
 ## Scripts Included
