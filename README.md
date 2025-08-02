@@ -80,7 +80,8 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 #### Key Features
 
-- Import AD Users and Groups from CSV files.
+- Import AD Users and Groups from CSV files (`-User` and `-Group` mode).
+- Register `ManagedBy` attribute for Groups separately in a dedicated run (`-FixGroup` mode).
 - Optionally include system objects.
 - Handle objects in `CN=Users` container specially and appropriately, redirecting them to a designated OU when needed.
 - Create missing intermediate OUs during the import.
@@ -102,6 +103,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 | `-UserFile`               | `-uf`   | No       | Path to user CSV file. Dialog prompts if omitted and `-User` is set.                                  |
 | `-Group`                  | `-g`    | No       | Import mode for groups. Implied if `-GroupFile` specified.                                            |
 | `-GroupFile`              | `-gf`   | No       | Path to group CSV file. Dialog prompts if omitted and `-Group` is set.                                |
+| `-FixGroup`               |         | No       | Operates in a post-import fixup mode for existing groups. Run after user and group imports. This sets `ManagedBy` references that require prior import of users/groups. See note below. |
 | `-NoClassCheck`           |         | No       | Disables automatic checking of the CSV's ObjectClass column for consistency with the selected import mode (user or group). Use with caution. |
 | `-IncludeSystemObject`    |         | No       | Import critical system users/groups (normally dangerous).                                             |
 | `-NewUPNSuffix`           |         | No       | New suffix for UserPrincipalName. Defaults to value derived from `-DNPath`.                           |
@@ -111,6 +113,17 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 | `-NoForceUsersContainer`  |         | No       | Import objects as their DN dictates: if the DN is directly under the domain root, import as is; if under Users container, import as is. Mutually exclusive with `-NoUsersContainer`. |
 
 > \*Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
+
+---
+
+##### Note about `-FixGroup` mode
+
+`-FixGroup` enables a special post-import operation to set the `ManagedBy` property on groups using a provided GroupFile. This is necessary because `ManagedBy` typically references user objects, which must already exist in the target AD. This mode does not create or remove any groups or users—it only updates the `ManagedBy` property for existing groups, mapping references according to the `-DNPath`, and advanced options (such as `-TrimOU`, `-NoUsersContainer`, etc.).
+
+- `-FixGroup` is mutually exclusive with user/group import modes.
+- Requires a valid `-GroupFile` (prompted if omitted).
+- Use the same `DNPath` (and advanced options if applicable) as your prior imports for correct results.
+- For best results, run after all user and group objects are imported.
 
 ---
 
@@ -190,6 +203,21 @@ If password is absent for a user, the account will be created but remain disable
 
 # Import users, preserving DN structure (Users container or domain root) as-is
 .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -NoForceUsersContainer
+```
+
+##### Registering ManagedBy after User/Group Import
+
+To set the `ManagedBy` property for groups after importing users and groups, run the following sequence. Be sure to use the same `-DNPath` and advanced options (such as `-TrimOU`, `-NoUsersContainer`, etc.) for all runs to ensure DN mapping is consistent.
+
+```powershell
+# Import groups
+.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile ".\Groups_olddomain_local.csv"
+
+# Import users
+.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile ".\Users_olddomain_local.csv"
+
+# Register ManagedBy for groups using FixGroup mode
+.\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -FixGroup -GroupFile ".\Groups_olddomain_local.csv"
 ```
 
 #### Best Practices and Safety Tips
