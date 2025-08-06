@@ -33,7 +33,9 @@
 
      **注:** CanonicalName, CN, codePage, HomePage, Initials, Organization, PrimaryGroup, sAMAccountType など一部の列は現状 `import-ADData.ps1` では使用されませんが、作業中に参考にしたり将来の活用に備えて、保持しておくことをお勧めします。
 
-     **注:** 任意のユーザーにパスワードを登録したい場合は"Password"列を追加してください（詳細はREADMEや import-ADData.ps1 のヘルプ参照）。この列は、空欄の場合には `import-ADData.ps1` は無視するので、追加しても害はありません。
+     **注:** 任意のユーザーにパスワードを登録したい場合は`"Password"`列を追加してください（詳細はREADMEや import-ADData.ps1 のヘルプ参照）。この列は、空欄の場合には `import-ADData.ps1` は無視するので、追加しても害はありません。詳しくはREADMEや`import-ADData.ps1`のヘルプを参照してください。
+
+     **注:** また、ユーザーに次回ログオン時のパスワード変更を強制するかどうかを制御する`"ChangePasswordAtLogon"`列を追加することも可能です。値が`TRUE`/`YES`/`1`の場合は有効に、`FALSE`/`NO`/`0`の場合は無効になります。この列の存在は、`userAccountControl`に含まれるビットより優先されます。場合によっては`"Password"`列との併用が必要となります。詳しくはREADMEや`import-ADData.ps1`のヘルプを参照してください。
 
 3. **Users_domain_local-slim.xlsx（Groups_domain_local-slim.xlsx）**  
    不要な列を除去した後にこのファイル名で保存します。
