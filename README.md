@@ -122,7 +122,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 ##### Note about `-FixGroup` mode
 
-`-FixGroup` enables a special post-import operation to set the `ManagedBy` property on groups using a provided GroupFile. This is necessary because `ManagedBy` typically references user objects, which must already exist in the target AD. This mode does not create or remove any groups or users—it only updates the `ManagedBy` property for existing groups, mapping references according to the `-DNPath`, and advanced options (such as `-TrimOU`, `-NoUsersContainer`, etc.).
+`-FixGroup` enables a special post-import operation to set the `ManagedBy` property on groups, using the same GroupFile as in the import step. This is necessary because `ManagedBy` typically references user objects, which must already exist in the target AD. This mode does not create or remove any groups or users—it only updates the `ManagedBy` property for existing groups, mapping references according to the `-DNPath`, and advanced options (such as `-TrimOU`, `-NoUsersContainer`, etc.).
 
 - `-FixGroup` is mutually exclusive with user/group import modes.
 - Requires a valid `-GroupFile` (prompted if omitted).
@@ -181,11 +181,40 @@ If you specify `-NoForceUsersContainer`, objects are imported exactly as their D
 
 ---
 
-#### Password Handling and Account Enablement
+#### Password Handling, Account Enablement, and ChangePasswordAtLogon
 
-If you want to set a password for any users, add a `"Password"` column to the User CSV (not present in the original export) and put the password in plain text.  
-**Do note password is required to restore the "Enabled" flag of the account during import.**  
-If password is absent for a user, the account will be created but remain disabled.
+To set a password for users during import, add a `"Password"` column to your User CSV (this column is not present in the original export) and enter the desired password in plain text.
+
+**Password is required to `Enable` an account during import.**  
+If the password is absent for a user, the account will be created but remain disabled.
+
+##### Controlling the "User must change password at next logon" flag
+
+You have two options to control the "User must change password at next logon" (`ChangePasswordAtLogon`) setting for imported users:
+
+- **Via a dedicated CSV column:**  
+  Add a `"ChangePasswordAtLogon"` column to your User CSV.  
+  - If you set this column to a **positive value** (`TRUE`, `YES`, or `1`, case-insensitive), the flag will be explicitly set (user must change password at next logon).  
+  - If set to a **negative value** (`FALSE`, `NO`, or `0`), the flag will be explicitly cleared.
+  - **When setting this to POSITIVE VALUE a password is required in the `"Password"` column for that user.**
+  - When setting it to a negative value, the flag will be cleared regardless of whether a password is set, as Active Directory does not prohibit this operation.
+
+- **Via userAccountControl bit (legacy/fallback):**  
+  If the `"ChangePasswordAtLogon"` column is not present or is blank for a user, the script will honor the `0x80000` bit in the `userAccountControl` column, **if set**, provided a password is also present. If both the `0x80000` bit and the `"ChangePasswordAtLogon"` column are either absent or indicate a negative value, the script **does not clear** the "User must change password at next logon" flag; instead, the default password policy of the destination AD will apply.
+
+**Golden rule:**  
+The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence over the userAccountControl bit.
+
+**Summary Table:**
+
+| ChangePasswordAtLogon (column) | Password Set | Action                                                     |
+|--------------------------------|--------------|------------------------------------------------------------|
+| TRUE/YES/1                     | Yes          | Set-ADUser -ChangePasswordAtLogon $true                    |
+| FALSE/NO/0                     | Yes          | Set-ADUser -ChangePasswordAtLogon $false                   |
+| TRUE/YES/1                     | No           | Warn, do not set                                           |
+| FALSE/NO/0                     | No           | Set-ADUser -ChangePasswordAtLogon $false (this is allowed) |
+| blank/missing                  | Yes          | userAccountControl bit `0x80000` → set flag if present     |
+| blank/missing                  | No           | userAccountControl bit `0x80000` → warn, do not set        |
 
 ---
 
