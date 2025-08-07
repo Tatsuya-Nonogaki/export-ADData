@@ -174,6 +174,8 @@ If you specify `-NoForceUsersContainer`, objects are imported exactly as their D
 - If the DN was originally directly under the domain root, it is imported there.
 - If the DN was originally under the Users container, it remains in Users.
 
+This behavior also applies in cases where the resulting DN path ends up directly under the domain root, such as when all OUs are removed from an object's original DN by the `-TrimOU` option.
+
 **Precautions:**
 - These parameters are **mutually exclusive**; you must specify only one or neither.
 - Placing users or groups directly under the domain root is valid but not recommended for most environments.
