@@ -28,7 +28,7 @@ There are four major strategies for combining export and import:
    Allocate the users/groups onto a new domain basis, translating the domain naming, respecting hierarchies.
 
 3. **Export specifying "DC=domain,DC=local" and import to "OU=osaka,DC=domain,DC=local"**  
-   Whole migration from the domain basis to a new specific OU, along with all intermediate OUs the users/groups depend on. In this case, users under CN=Users container are created just under OU=osaka because it is impossible to create "Users" container nor OU=Users under the OU. Specifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
+   Whole migration from the domain basis to a new specific OU, along with all intermediate OUs the users/groups depend on. In this case, users under CN=Users container are created just under OU=osaka because it is impossible to create `Users` container nor OU=Users under the OU. Specifying "newdomain" is also a viable choice, which is like a move to a different floor of a different building.
 
 4. **Export specifying "OU=sales,DC=domain,DC=local" and import to "DC=domain,DC=local" with `-TrimOU sales`**  
    Useful for flattening part of the OU hierarchy. By exporting from a specific OU and importing to the domain root with `-TrimOU`, you can migrate only the objects under that OU directly to the root (or another OU), effectively removing their original OU nesting.
@@ -93,7 +93,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 - Never overwrite existing Users/Groups. Warn and skip in each case.
 - Option to disable "protect from accidental deletion" for newly created OUs, useful for pre-validation etc.
 - Supports registering user passwords if provided in the CSV.
-- Advanced features for OU trimming and control over Users container placement (`-TrimOU`, `-NoUsersContainer`, `-NoForceUsersContainer`).
+- Advanced features for OU trimming and control over `Users` container placement (`-TrimOU`, `-NoUsersContainer`, `-NoForceUsersContainer`).
 - Mode vs file mismatch detection: Warns and prompts if the selected CSV file suggests a mismatch with the chosen import mode (e.g., a group import with a user data file), helping avoid accidental mis-imports. Contents check can be bypassed with `-NoClassCheck` switch for more flexible or advanced import scenarios.
 
 #### Parameters
@@ -113,8 +113,8 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 | `-NewUPNSuffix`           |         | No       | New suffix for UserPrincipalName. Defaults to value derived from `-DNPath`.                           |
 | `-NoProtectNewOU`         |         | No       | Newly created OUs will not be protected from accidental deletion.                                     |
 | `-TrimOU`                 |         | No       | Remove one or more rightmost (nearest the domain root) OUs from source DNs before import.             |
-| `-NoUsersContainer`       |         | No       | Place users/groups with no OU or in Users container directly under the domain root instead of `CN=Users,DC=...`.            |
-| `-NoForceUsersContainer`  |         | No       | Import objects as their DN dictates: if the DN is directly under the domain root, import as is; if under Users container, import as is. Mutually exclusive with `-NoUsersContainer`. |
+| `-NoUsersContainer`       |         | No       | Place users/groups with no OU or in `Users` container directly under the domain root instead of `CN=Users,DC=...`.            |
+| `-NoForceUsersContainer`  |         | No       | Import objects as their DN dictates: if the DN is directly under the domain root, import as is; if under `Users` container, import as is. Mutually exclusive with `-NoUsersContainer`. |
 
 > \*Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
 
@@ -135,7 +135,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 ##### -TrimOU
 
-Allows you to remove one or more OUs from the end (domain-root side) of the DistinguishedName of imported objects. The argument must be a comma-separated list of OU names (without the `OU=` prefix).
+Allows you to remove one or more OUs from the end (domain-root side) of the DistinguishedName of objects to be imported. The argument must be a comma-separated list of OU names (without the `OU=` prefix).
 
 ```powershell
 -TrimOU "deeper,sales"
@@ -172,7 +172,7 @@ By default, users and groups that would otherwise be created directly under the 
 If you specify `-NoUsersContainer`, such objects are instead created directly under the domain root (`DC=...`).  
 If you specify `-NoForceUsersContainer`, objects are imported exactly as their DN dictates:  
 - If the DN was originally directly under the domain root, it is imported there.
-- If the DN was originally under the Users container, it remains in Users.
+- If the DN was originally under the `Users` container, it remains in `Users`.
 
 This behavior also applies in cases where the resulting DN path ends up directly under the domain root, such as when all OUs are removed from an object's original DN by the `-TrimOU` option.
 
@@ -192,7 +192,7 @@ If the password is absent for a user, the account will be created but remain dis
 
 ##### Controlling the "User must change password at next logon" flag
 
-You have two options to control the "User must change password at next logon" (`ChangePasswordAtLogon`) setting for imported users:
+You have two options to control the "User must change password at next logon" (`ChangePasswordAtLogon`) setting for users to be imported:
 
 - **Via a dedicated CSV column:**  
   Add a `"ChangePasswordAtLogon"` column to your User CSV.  
