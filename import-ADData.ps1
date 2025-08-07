@@ -96,19 +96,17 @@
   For full details and examples, see the README.
 
  .PARAMETER NoUsersContainer
-  If specified, user and group objects whose DN is directly under the domain root 
-  are created under the domain root (DC=...) instead of the default Users container 
-  (CN=Users,DC=...). This option also affects cases where the resulting DN path is 
-  placed directly under the domain root, such as when `-TrimOU` removes all OUs from 
-  the original DN.
+  If specified, users and groups that would otherwise be created in the 'Users' 
+  container (CN=Users,DC=...) are instead created directly under the domain root 
+  (DC=...). This option also affects cases where -TrimOU causes the object to be 
+  relocated to the domain root.
   This parameter is mutually exclusive with -NoForceUsersContainer.
 
  .PARAMETER NoForceUsersContainer
-  If specified, objects are imported exactly as their DN dictates: if the DN is 
-  directly under the domain root, it is imported there; if under the Users container, 
-  it remains in Users. This option also affects cases where the resulting DN path 
-  is placed directly under the domain root, such as when `-TrimOU` removes all OUs 
-  from the original DN.
+  If specified, objects are imported exactly as their DN dictates: if the users or 
+  groups are directly under the domain root, they are imported there; if they are 
+  under the 'Users' container, they remain in 'Users'. This option also affects 
+  cases where -TrimOU causes the object to be relocated to the domain root. 
   This parameter is mutually exclusive with -NoUsersContainer.
 
  .EXAMPLE
