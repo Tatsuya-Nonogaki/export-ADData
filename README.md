@@ -168,7 +168,7 @@ This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OU
 
 ##### -NoUsersContainer and -NoForceUsersContainer
 
-By default, user or group objects imported directly under the domain root (with no OU) are placed in the domain's default container (`CN=Users,DC=...`).  
+By default, users and groups that would otherwise be created directly under the domain root are placed in the domain's default container (`CN=Users,DC=...`).  
 If you specify `-NoUsersContainer`, such objects are instead created directly under the domain root (`DC=...`).  
 If you specify `-NoForceUsersContainer`, objects are imported exactly as their DN dictates:  
 - If the DN was originally directly under the domain root, it is imported there.
