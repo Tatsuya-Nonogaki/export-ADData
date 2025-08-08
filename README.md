@@ -9,6 +9,12 @@ export-ADData is a flexible PowerShell toolkit for exporting and importing Activ
 - **`compare-ADCSV`**: Compare two AD export CSVs for verification.
 - **`check-ADUserPassword`**: Check AD user password validity.
 
+### 📢 Stay Updated!
+**Want to know when this project is updated?**  
+Subscribe to the commit feed (no login required):  
+[![RSS](https://img.shields.io/badge/rss-commits-orange)](https://github.com/Tatsuya-Nonogaki/export-ADData/commits/main.atom)  
+<sub>Paste the above link into your favorite RSS reader to get notified of new commits!</sub>
+
 ---
 
 ## Typical Workflow and Usage Scenarios
