@@ -4,7 +4,7 @@
 
 export-ADData is a flexible PowerShell toolkit for exporting and importing Active Directory users and groups. Easily convert AD data to CSV and back, with advanced import features for cross-domain migration, OU reorganization, granular mapping, and robust validation. Ideal for admins managing AD at scale.
 
-- **`export-ADData`**: Export Active Directory (AD) users and groups to CSV files with flexible options.
+- **`export-ADData`**: Export Active Directory (AD) users, groups, and computers to CSV files with flexible options.
 - **`import-ADData`**: Import AD users and groups from CSV files, supporting migration, OU reorganization, cross-domain moves, flattening, and detailed mapping.
 - **`compare-ADCSV`**: Compare two AD export CSVs for verification.
 - **`check-ADUserPassword`**: Check AD user password validity.
@@ -49,11 +49,12 @@ There are four major strategies for combining export and import:
 
 #### Overview
 
-Exports users and groups from Active Directory to CSV files using a specified domain or OU as the starting point.
+Exports users, groups, and computers from Active Directory to CSV files using a specified domain or OU as the starting point.
 
 #### Key Features
 
 - Export AD Users and Groups to a pair of CSV files.
+- Optionally export AD Computers to a CSV file.
 - Possible to exclude system objects from output.
 - Supports specifying the export base via Distinguished Name (`-DNPath`) or dotted prefix (`-DNPrefix`).
 - Flexible output path selection.
@@ -66,6 +67,7 @@ Exports users and groups from Active Directory to CSV files using a specified do
 | `-DNPrefix`           | `-d`      | Yes\*    | Alternative to `-DNPath`. Dotted format (e.g., `unit.domain.local`).                                  |
 | `-DCDepth`            |           | No       | Depth of DC components in `-DNPrefix` (default: 2).                                                   |
 | `-OutPath`            | `-o`      | No       | Folder path for output CSVs. Dialog prompts if omitted.                                               |
+| `-Computer`           | `-comp`   | No       | Export Computers only. Users and Groups are not processed.                                            |
 | `-ExcludeSystemObject`| `-nosys`  | No       | Exclude system users/groups from export.                                                              |
 
 > \*Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
