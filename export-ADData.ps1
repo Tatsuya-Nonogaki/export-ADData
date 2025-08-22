@@ -40,12 +40,16 @@
   'Guest(s)', 'Domain Users' and trusted 'DOMAIN$'.
  
  .EXAMPLE
-   # Export AD Users and Groups from the Domain basis to CSV files in "C:\ADExport"
-   .\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -OutPath "C:\ADExport"
+   # Export AD Users and Groups from the Domain root to CSV files in "C:\ADExport", excluding system objects
+   .\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -OutPath "C:\ADExport" -ExcludeSystemObject
  
  .EXAMPLE
-   # (Not recommended) Export AD Users and Groups, specifying a specific hierarchy base.
+   # Export AD Users and Groups, specifying a specific hierarchy base.
    .\export-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -OutPath "C:\ADExport"
+
+ .EXAMPLE
+   # Export AD Computers from the domain root, making the script prompt for output folder via dialog
+   .\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -Computer
 #>
 [CmdletBinding()]
 param(
