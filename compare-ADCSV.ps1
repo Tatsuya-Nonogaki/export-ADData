@@ -1,10 +1,10 @@
 <#
  .SYNOPSIS
-  Compare two CSVs of users or groups exported from Active Directory.
+  Compare two CSVs of users, groups, or computers exported from Active Directory.
  
  .DESCRIPTION
-  Compare two CSVs of users or groups exported from Active Directory. 
-  Version: 0.2.2
+  Compare two CSVs of users, groups, or computers exported from Active Directory. 
+  Version: 0.2.3
   
   Comparison is done with sAMAccountName as the key, without being affected by 
   the order of records in the CSV file, unlike ordinary "diff" tools. Detects 
@@ -49,7 +49,7 @@ $newRecords = Import-Csv -Path $NewFile
 
 $comparisonResults = @()
 
-# Detect user vs group export
+# Detect user vs other export
 $isUserExport = $false
 if ($oldRecords[0].PSObject.Properties.Name -contains 'ObjectClass') {
     $isUserExport = $oldRecords[0].ObjectClass -eq 'user'
