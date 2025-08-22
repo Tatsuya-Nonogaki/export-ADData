@@ -205,7 +205,7 @@ process {
             exit 1
         }
 
-        $DNPath = ConvertPrefixToDNPath -prefix $DNPrefix -DCDepth $DCDepth
+        $DNPath = ConvertPrefixToDNPath -prefix $DNPrefix -depth $DCDepth
         if (-not $DNPath) {
             Write-Error "Error occurred while converting DNPrefix to DNPath"
             exit 1
