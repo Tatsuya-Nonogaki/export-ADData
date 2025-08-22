@@ -1,16 +1,17 @@
 <#
  .SYNOPSIS
-  Imports users and groups into Active Directory.
+  Imports users, groups, and computers into Active Directory.
 
  .DESCRIPTION
-  Imports users and groups into Active Directory from CSV files.
+  Imports users, groups, and computers into Active Directory from CSV files.
   Supports advanced scenarios such as domain migration, OU reorganization, flattening 
   OU hierarchies by trimming OUs, and more.
   Automatically creates missing intermediate OUs as needed.
-  Special options allow for placing users/groups with no OU or in the 'Users' 
-  container directly under the domain root, or for importing objects as-is.
+  Special options allow for placing users/groups/computers with no OU or in the 
+  "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
+  domain root, or for importing objects as-is.
   
-  Version: 0.9.7
+  Version: 1.0.0
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -54,29 +55,36 @@
   (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
   dialog prompts you.
 
+ .PARAMETER Computer
+  (Alias -c) Operates in computer import mode. Can be omitted if -ComputerFile is specified.
+
+ .PARAMETER ComputerFile
+  (Alias -cf) Path to computer CSV file. If omitted with -Computer, a file selection 
+  dialog prompts you.
+
  .PARAMETER FixGroup
   Optional. Operates in a post-import fixup mode for existing groups (distinct from 
   -User and -Group import modes). 
   Currently, this mode registers the ManagedBy attribute for groups, using the same 
   GroupFile as in the import step. This must be run after users and groups have 
   already been imported, since ManagedBy references are typically user accounts.
-  Mutually exclusive with -User, -UserFile, and -Group. Requires -GroupFile (or 
-  prompts if omitted).
-  Use the same advanced options (-TrimOU, -NoUsersContainer, -NoForceUsersContainer) 
+  Mutually exclusive with other modes (-User/-Group/-computer). Requires -GroupFile 
+  (or prompts if omitted).
+  Use the same advanced options (-TrimOU, -NoDefaultContainer, -NoForceDefaultContainer) 
   as in your previous imports.
   This mode does not create or remove any groups or users; it only updates ManagedBy 
   for existing groups.
 
  .PARAMETER NoClassCheck
   By default, this script automatically checks that all records in the input file 
-  have an 'ObjectClass' matching the selected import mode (user or group), before 
+  have an 'ObjectClass' matching the selected import mode (user/group/computer), before 
   importing anything. This switch disables the check, thus allowing you to import 
   files that are missing the column, or that contain mixed or incorrect types.
   Only use this if you know what you are doing.
 
  .PARAMETER IncludeSystemObject
-  Optional. Import also critical system users/groups and trusted DOMAIN$ (normally 
-  dangerous for regular environments).
+  Optional. Import also critical system users/groups/computers and trusted DOMAIN$ 
+  (normally dangerous for regular environments).
 
  .PARAMETER NewUPNSuffix
   Optional. Specify a new UserPrincipalName suffix for imported users. Defaults to 
@@ -91,23 +99,25 @@
   they are trimmed.
   It accepts a comma-separated list of OU names (without 'OU=' prefix). Only plain 
   OU names are allowed.
-  Reserved words (ou, cn, dc, users, =) are not permitted (case-insensitive match).
+  Reserved words (ou, cn, dc, users, computers, =) are not permitted (case-insensitive match).
   Always enclose multiple names in quotes, e.g. -TrimOU "deeper,sales".
   For full details and examples, see the README.
 
- .PARAMETER NoUsersContainer
-  If specified, users and groups that would otherwise be created in the 'Users' 
-  container (CN=Users,DC=...) are instead created directly under the domain root 
-  (DC=...). This option also affects cases where -TrimOU causes the object to be 
-  relocated to the domain root.
-  This parameter is mutually exclusive with -NoForceUsersContainer.
+ .PARAMETER NoDefaultContainer
+  If specified, the account that would otherwise be created in the "default" container 
+  are instead created directly under the domain root (DC=...). By AD's default, the 
+  container is 'Users' (CN=Users,DC=...) for user and group, and 'Computers' for computer. 
+  This option also affects cases where -TrimOU causes the object to be relocated to the 
+  domain root.
+  This parameter is mutually exclusive with -NoForceDefaultContainer.
 
- .PARAMETER NoForceUsersContainer
-  If specified, objects are imported exactly as their DN dictates: if the users or 
-  groups are directly under the domain root, they are imported there; if they are 
-  under the 'Users' container, they remain in 'Users'. This option also affects 
-  cases where -TrimOU causes the object to be relocated to the domain root. 
-  This parameter is mutually exclusive with -NoUsersContainer.
+ .PARAMETER NoForceDefaultContainer
+  If specified, objects are imported exactly as their DN dictates: if the objects 
+  are directly under the domain root in the source, they are imported there; if they 
+  are under the "default" container (see NoDefaultContainer), they remain in destinations 
+  "default" container. This option also affects cases where -TrimOU causes the object 
+  to be relocated to the domain root. 
+  This parameter is mutually exclusive with -NoDefaultContainer.
 
  .EXAMPLE
   # Import AD Groups from CSV to a new domain, excluding system objects
@@ -119,8 +129,8 @@
   # NOTE: You must create the *base* OU "osaka" in the destination AD before running the import, if it does not already exist.
 
  .EXAMPLE
-  # Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
-  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
+  # Import AD Computers from CSV
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -ComputerFile "C:\Exp\Computers_olddomain_local.csv"
 
  .EXAMPLE
   # Import users, trimming OUs "deeper" and "sales" from the domain-root side.
@@ -128,14 +138,14 @@
   #   CN=foo,OU=deeper,OU=sales,DC=olddomain,DC=local
   # then -TrimOU "deeper,sales" will result in:
   #   CN=foo,DC=domain,DC=local
-  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoUsersContainer
+  .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoDefaultContainer
 
  .EXAMPLE
   # Register ManagedBy property for Groups after importing Groups and Users.
   .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -GroupFile ".\Groups_olddomain_local.csv"
   .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -UserFile ".\Users_olddomain_local.csv"
   .\import-ADData.ps1 -DNPath "DC=newdomain,DC=local" -FixGroup -GroupFile ".\Groups_olddomain_local.csv"
-  # You must use exactly the same advanced options (if applicable: -TrimOU, -NoUsersContainer, -NoForceUsersContainer) for all runs in this sequence to avoid DN path translation mismatches.
+  # You must use exactly the same advanced options (if applicable: -TrimOU, -NoDefaultContainer, -NoForceDefaultContainer) for all runs in this sequence to avoid DN path translation mismatches.
 #>
 [CmdletBinding()]
 param(
@@ -163,14 +173,22 @@ param(
     [switch]$Group,
 
     [Parameter()]
+    [Alias("gf")]
+    [string]$GroupFile,
+
+    [Parameter()]
+    [Alias("c")]
+    [switch]$Computer,
+
+    [Parameter()]
+    [Alias("cf")]
+    [string]$ComputerFile,
+
+    [Parameter()]
     [switch]$FixGroup,
 
     [Parameter()]
     [switch]$NoClassCheck,
-
-    [Parameter()]
-    [Alias("gf")]
-    [string]$GroupFile,
 
     [Parameter()]
     [switch]$IncludeSystemObject,
@@ -185,10 +203,10 @@ param(
     [string]$TrimOU,
 
     [Parameter()]
-    [switch]$NoUsersContainer,
+    [switch]$NoDefaultContainer,
 
     [Parameter()]
-    [switch]$NoForceUsersContainer
+    [switch]$NoForceDefaultContainer
 )
 
 begin {
@@ -205,15 +223,37 @@ begin {
         "$Timestamp - $Message" | Out-File -Append -FilePath $LogFilePath -Encoding UTF8
     }
 
+    # Resolve Default Container name
+    function Get-DefaultContainerName {
+        param(
+            [string]$Want
+        )
+
+        if ($Want) {
+            switch ($Want.ToLower()) {
+                "user"      { return "Users" }
+                "group"     { return "Users" }
+                "fixgroup"  { return "Users" }
+                "computer"  { return "Computers" }
+                default     { return "Users" }
+            }
+        }
+        elseif ($wantFixGroup)   { return "Users" }
+        elseif ($wantUser)       { return "Users" }
+        elseif ($wantGroup)      { return "Users" }
+        elseif ($wantComputer)   { return "Computers" }
+        else                     { return "Users" }
+    }
+
     # Arguments validation
     if ($PSBoundParameters.Count -eq 0) {
         Get-Help $MyInvocation.InvocationName
         exit
     }
 
-    # Mutually exclusive: NoUsersContainer and NoForceUsersContainer
-    if ($NoUsersContainer -and $NoForceUsersContainer) {
-        throw "Error: -NoUsersContainer and -NoForceUsersContainer are mutually exclusive. Please specify only one."
+    # Mutually exclusive: NoDefaultContainer and NoForceDefaultContainer
+    if ($NoDefaultContainer -and $NoForceDefaultContainer) {
+        throw "Error: -NoDefaultContainer and -NoForceDefaultContainer are mutually exclusive. Please specify only one."
     }
 
     if (-not $PSBoundParameters.ContainsKey('DNPath')) {
@@ -242,28 +282,33 @@ begin {
             exit 2
         }
     }
+    if ($PSBoundParameters.ContainsKey('ComputerFile')) {
+        if (-not $ComputerFile -or $ComputerFile.Trim() -eq "") {
+            Write-Host "Error: -ComputerFile was specified but is blank or whitespace." -ForegroundColor Red
+            exit 2
+        }
+    }
 
+    # Main mode parameters and mutual exclusion checks
     $userMode = $false
     $groupMode = $false
+    $computerMode = $false
     $fixGroupMode = $false
 
     $wantUser = $User -or $PSBoundParameters.ContainsKey('UserFile')
     $wantGroup = $Group -or $PSBoundParameters.ContainsKey('GroupFile')
+    $wantComputer = $Computer -or $PSBoundParameters.ContainsKey('ComputerFile')
     $wantFixGroup = $FixGroup
 
     if ($wantFixGroup) {
-        if ($wantUser) {
-            Write-Host "Error: -FixGroup cannot be combined with -User or -UserFile." -ForegroundColor Red
-            exit 2
-        }
-        if ($Group) {
-            Write-Host "Error: -FixGroup cannot be combined with -Group. -GroupFile is acceptable." -ForegroundColor Red
+        if ($wantUser -or $wantGroup -or $wantComputer) {
+            Write-Host "Error: -FixGroup cannot be combined with -User, -Group, or -Computer modes." -ForegroundColor Red
             exit 2
         }
         $fixGroupMode = $true
     }
-    elseif ($wantUser -and $wantGroup) {
-        Write-Host "Error: Specify only one of User mode (-User, -UserFile) or Group mode (-Group, -GroupFile)." -ForegroundColor Red
+    elseif (($wantUser + $wantGroup + $wantComputer) -gt 1) {
+        Write-Host "Error: Specify only one of User mode (-User, -UserFile), Group mode (-Group, -GroupFile), or Computer mode (-Computer, -ComputerFile)." -ForegroundColor Red
         exit 2
     }
     elseif ($wantUser) {
@@ -272,10 +317,15 @@ begin {
     elseif ($wantGroup) {
         $groupMode = $true
     }
+    elseif ($wantComputer) {
+        $computerMode = $true
+    }
     else {
-        Write-Host "Error: At least one of -User and/or -UserFile, -Group and/or -GroupFile, or -FixGroup must be specified." -ForegroundColor Red
+        Write-Host "Error: At least one of -User (-UserFile), -Group (-GroupFile), -Computer (-ComputerFile), or -FixGroup must be specified." -ForegroundColor Red
         exit 2
     }
+
+    $DefaultContainerName = Get-DefaultContainerName
 
     # UPN suffix sanity check
     if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
@@ -298,7 +348,7 @@ begin {
     # TrimOU parsing and validation
     $TrimOUList = @()
     if ($PSBoundParameters.ContainsKey('TrimOU')) {
-        $reservedWords = @('ou', 'cn', 'dc', 'users', '=')
+        $reservedWords = @('ou', 'cn', 'dc', 'users', 'computers', '=')
         $TrimOUList = $TrimOU -split ',' | ForEach-Object { $_.Trim() }
         $trimCount = $TrimOUList.Count
 
@@ -325,11 +375,15 @@ process {
         param (
             [string]$type
         )
+
         if ($type -eq "user") {
             $req = "user CSV file"
         } elseif ($type -eq "group") {
             $req = "group CSV file"
+        } elseif ($type -eq "computer") {
+            $req = "computer CSV file"
         }
+
         Add-Type -AssemblyName System.Windows.Forms
         $fileBrowser = New-Object System.Windows.Forms.OpenFileDialog
         $fileBrowser.Title = "Select the $req"
@@ -342,39 +396,71 @@ process {
         return ""
     }
 
+    function FileName-WrongType-Warn {
+        param (
+            [string]$FilePath,
+            [string]$MyType
+        )
+        $AllTypes = @("user", "group", "computer")
+        $OtherTypes = $AllTypes | Where-Object { $_ -ne $MyType }
+        $fileName = Split-Path $FilePath -Leaf
+
+        foreach ($other in $OtherTypes) {
+            if ($fileName -match "(?i)(^|[._ -])$($other)([._ -]|s|$)") {
+                Write-Host "Warning: The file name implies it is a $other data file, not '$MyType'." -ForegroundColor Yellow
+                $resp = Read-Host "Continue anyway? [Y]/N"
+                if ($resp -and $resp -match '^(n|no)$') {
+                    Write-Host "Aborted by user." -ForegroundColor Yellow
+                    return $true
+                }
+                # Warn only once
+                break
+            }
+        }
+        return $false
+    }
+
     # Generate DN path from DN prefix
     function ConvertPrefixToDNPath {
         param (
             [string]$prefix,
-            [int]$DCDepth
+            [int]$depth
         )
+
         $domainParts = $prefix.Split('.')
         if ($domainParts.Count -lt 2) {
             Write-Error "Invalid prefix format: Expected at least two domain components (e.g., mydomain.local)"
             exit 1
         }
-        if ($DCDepth -lt 1 -or $DCDepth -gt $domainParts.Count) {
+        if ($depth -lt 1 -or $depth -gt $domainParts.Count) {
             Write-Error "Invalid DCDepth: It must be at least 1 and at most the total number of domain components."
             exit 1
         }
 
-        $DNPath = ""
+        $dnForm = ""
 
-        # Assume DC are the last DCDepth elements
-        $dcParts = $domainParts[-$DCDepth..-1]
+        # Assume DC are the last depth elements
+        $dcParts = $domainParts[-$depth..-1]
 
         # Assume the shallower elements are OU
-        $ouParts = $domainParts[0..($domainParts.Count - $DCDepth - 1)]
+        $ouEnd = $domainParts.Count - $DCDepth - 1
+        if ($ouEnd -ge 0) {
+            $ouParts = $domainParts[0..$ouEnd]
+        } else {
+            $ouParts = @()
+        }
+        if ($ouParts -is [string]) { $ouParts = @($ouParts) }
 
-        foreach ($ou in [array]::Reverse($ouParts)) {
-            $DNPath += "OU=$ou,"
+        [array]::Reverse($ouParts)
+        foreach ($ou in $ouParts) {
+            $dnForm += "OU=$ou,"
         }
 
         foreach ($dc in $dcParts) {
-            $DNPath += "DC=$dc,"
+            $dnForm += "DC=$dc,"
         }
 
-        return $DNPath.TrimEnd(',')
+        return $dnForm.TrimEnd(',')
     }
 
     # Check existence of the DN Path on the AD
@@ -433,7 +519,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
     function Get-NewDN {
         param (
             [string]$originalDN,
-            [string]$DNPath
+            [string]$DNPath,
+            [string]$DefaultContainer = $DefaultContainerName
         )
 
         if (-not $originalDN) {
@@ -444,9 +531,10 @@ Review your CSV. To override this check, use -NoClassCheck.)
             $cnPart = $matches[1]
         }
         $ouPath = ConvertDNBase -oldDN $originalDN -newDNPath $DNPath
+        $ouPath = ConvertDNBase -oldDN $originalDN -newDNPath $DNPath -DefaultContainer $DefaultContainer
 
         if ($cnPart) {
-            Write-Log "debug :: Get-NewDN : return ${cnPart},$ouPath"
+           # Write-Log "debug :: Get-NewDN : return ${cnPart},$ouPath"
             return "${cnPart},$ouPath"
         } else {
             Write-Log "Warning: Get-NewDN : originalDN has no CN part"
@@ -459,6 +547,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
         param (
             [string]$oldDN,
             [string]$newDNPath,
+            [string]$DefaultContainer = $DefaultContainerName,
             [switch]$CreateOUIfNotExists
         )
 
@@ -474,7 +563,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
         # --- 2. Remove the deepest OUs from ouParts array according to '-TrimOU' argument ---
       # Write-Log "debug :: ConvertDNBase :: original oldDN: '$oldDN'"
-        Write-Log "debug :: ConvertDNBase :: original ouParts: $($ouParts -join '|')"
+      # Write-Log "debug :: ConvertDNBase :: original ouParts: $($ouParts -join '|')"
         if ($ouParts.Count -gt 0 -and $ouParts[0].Length -le 2) {
             Write-Log "Error: Detected malformed ouParts: $($ouParts -join '|')"
             throw "TrimOU error: ouParts appears malformed (likely split into characters). Check your CSV DN format and delimiter."
@@ -543,32 +632,32 @@ Review your CSV. To override this check, use -NoClassCheck.)
         }
 
         # --- 3-B. In case no OUs remain: only CN and DC ---
-        $isUsersContainer = $oldDN -match "^CN=.*?,CN=Users,DC="
+        $isDefaultContainer = $oldDN -match "^CN=.*?,CN=$($DefaultContainer),DC="
         $importBaseHasOU = $newDNPath -match '^OU='
 
-        if ($NoUsersContainer) {
-            # Always place at domain base (strip Users container)
+        if ($NoDefaultContainer) {
+            # Always place at domain base (strip default container)
             return $newDNPath
         }
-        elseif ($NoForceUsersContainer) {
-            # Place as-is: if Users container, keep; else domain base
-            if ($isUsersContainer) {
-                # If import base has OU, ignore CN=Users (place in OU); else, keep Users container
+        elseif ($NoForceDefaultContainer) {
+            # Place as-is: if default container, keep; else domain base
+            if ($isDefaultContainer) {
+                # If import base has OU, ignore default container (place in OU); else, keep default container
                 if ($importBaseHasOU) {
                     return $newDNPath
                 } else {
-                    return "CN=Users," + $baseDC
+                    return "CN=$DefaultContainer," + $baseDC
                 }
             } else {
                 return $newDNPath
             }
         }
         else {
-            # Default: If import base has OU, place in that OU; else, in CN=Users
+            # Default: If import base has OU, place in that OU; else, in CN=DefaultContainer
             if ($importBaseHasOU) {
                 return $newDNPath
             } else {
-                return "CN=Users," + $baseDC
+                return "CN=$DefaultContainer," + $baseDC
             }
         }
     }
@@ -623,14 +712,10 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     $ouPath = ConvertDNBase -oldDN $usr.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
                     $managerDN = if ($usr.Manager -ne "") { Get-NewDN -originalDN $usr.Manager -DNPath $DNPath } else { $null }
 
+                    # Set only required properties for 'New-ADUser' here; move all others to '$additionalProperties'
                     $newUserParams = @{
                         Name           = $usr.Name
-                        DisplayName    = $usr.DisplayName
                         SamAccountName = $sAMAccountName
-                        Description    = $usr.Description
-                        GivenName      = $usr.GivenName
-                        Surname        = $usr.Surname
-                        Manager        = $managerDN
                     }
 
                     Try {
@@ -658,6 +743,11 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                     # Set additional properties using Set-ADUser
                     $additionalProperties = @{
+                        DisplayName      = $usr.DisplayName
+                        Description      = $usr.Description
+                        GivenName        = $usr.GivenName
+                        Surname          = $usr.Surname
+                        Manager          = $managerDN
                         ProfilePath      = $usr.ProfilePath
                         ScriptPath       = $usr.ScriptPath
                         Company          = $usr.Company
@@ -675,6 +765,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         HomePhone        = $usr.HomePhone
                         Fax              = $usr.Fax
                         Pager            = $usr.Pager
+                        # Define other properties here if needed
                     }
 
                     foreach ($property in $additionalProperties.Keys) {
@@ -689,7 +780,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                                 Write-Log "Property $property set for user: sAMAccountName=$sAMAccountName"
                             } Catch {
                                 Write-Host "Warning: Failed to set property $property for user ${sAMAccountName}" -ForegroundColor Yellow
-                                Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName - $_"
+                                Write-Log "Failed to set property $property for user: sAMAccountName=$sAMAccountName, ${property}='$($additionalProperties[$property])' - $_"
                             }
                         }
                     }
@@ -882,13 +973,12 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                     $ouPath = ConvertDNBase -oldDN $grp.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
 
+                    # Set only required properties for 'New-ADGroup' here; move all others to '$additionalProperties'
                     $newGroupParams = @{
-                        Name           = $grp.Name    # or $grp.CN
+                        Name           = $grp.Name       # or $grp.CN
                         SamAccountName = $sAMAccountName
-                        Description    = $grp.Description
-                        GroupCategory  = "Security" # modified later if necessary
-                        GroupScope     = "Global"   # modified later if necessary
-                        # Define other properties here if needed
+                        GroupCategory  = "Security"      # modified later if necessary
+                        GroupScope     = "Global"        # modified later if necessary
                     }
 
                     # Determine GroupCategory based on CSV values
@@ -930,6 +1020,30 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         continue
                     }
 
+                    # Set additional properties using Set-ADGroup
+                    $additionalProperties = @{
+                        Description    = $grp.Description
+                        # DON'T include "ManagedBy". It is registered separately in '-FixGroup' mode run of this script.
+                        # Define other properties here if needed
+                    }
+
+                    foreach ($property in $additionalProperties.Keys) {
+                        if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
+                            $params = @{
+                                Identity = $sAMAccountName
+                            }
+                            $params[$property] = $additionalProperties[$property]
+                            Try {
+                                Set-ADGroup @params
+                                Write-Host "  => Property $property set for group: $sAMAccountName"
+                                Write-Log "Property $property set for group: sAMAccountName=$sAMAccountName"
+                            } Catch {
+                                Write-Host "Warning: Failed to set property $property for group ${sAMAccountName}" -ForegroundColor Yellow
+                                Write-Log "Failed to set property $property for group: sAMAccountName=$sAMAccountName, ${property}='$($additionalProperties[$property])' - $_"
+                            }
+                        }
+                    }
+
                     # Add this group to parent groups
                     $memberOfGroups = $grp.MemberOf -split ';'
                     foreach ($parentGroup in $memberOfGroups) {
@@ -949,6 +1063,135 @@ Review your CSV. To override this check, use -NoClassCheck.)
                 } else {
                     Write-Host "Group $sAMAccountName already exists; skipping import"
                     Write-Log "Group Skipped (Already Exists): sAMAccountName=$sAMAccountName"
+                }
+            }
+
+        } elseif ($objectClass -eq "computer") {
+            $excludedComputers = @() # Extend if you want to exclude specific accounts
+
+            $computers = Import-Csv -Path $filePath | Where-Object {
+                if ($IncludeSystemObject) {
+                    return $true
+                } else {
+                    if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -in $excludedComputers) {
+                        Write-Host "Excluded System Computer: $($_.sAMAccountName)"
+                        Write-Log "Excluded System Computer: sAMAccountName=$($_.sAMAccountName)"
+                        return $false
+                    } else {
+                        return $true
+                    }
+                }
+            }
+
+            # Ensure these records are of AD Computers
+            Test-ObjectClassColumn -CsvRows $computers -ExpectClass 'computer' -NoClassCheck:$NoClassCheck
+
+            foreach ($comp in $computers) {
+                $sAMAccountName = $comp.sAMAccountName
+
+                # Check existence of the computer
+                $computerExists = Get-ADComputer -Filter "SamAccountName -eq '$sAMAccountName'" -ErrorAction SilentlyContinue
+
+                if (-not $computerExists) {
+                    Write-Host "Processing computer sAMAccountName=`"$sAMAccountName`""
+                    Write-Log "Processing computer sAMAccountName=`"$sAMAccountName`""
+
+                    $ouPath = ConvertDNBase -oldDN $comp.DistinguishedName -newDNPath $DNPath -CreateOUIfNotExists
+                    $managedByDN = if ($comp.ManagedBy -ne "") {
+                          Get-NewDN -originalDN $comp.ManagedBy -DNPath $DNPath -DefaultContainer (Get-DefaultContainerName -Want "User")
+                      } else {
+                          $null
+                    }
+
+                    # Set only required properties for 'New-ADComputer' here; move all others to '$additionalProperties'
+                    $newComputerParams = @{
+                        Name           = $comp.Name
+                        SamAccountName = $sAMAccountName
+                    }
+
+                    Try {
+                        if ($ouPath -match '^CN=Computers,DC=') {
+                            New-ADComputer @newComputerParams -ErrorAction Stop
+                            Write-Log "New-ADComputer `@newComputerParams"
+                        } else {
+                            New-ADComputer @newComputerParams -Path $ouPath -ErrorAction Stop
+                            Write-Log "New-ADComputer `@newComputerParams -Path $ouPath"
+                        }
+                    } Catch {
+                        Write-Error "Failed to create computer ${sAMAccountName}: $_"
+                        Write-Log "Failed to create computer: sAMAccountName=$sAMAccountName - $_"
+                    }
+
+                    $createdComputer = Get-ADComputer -Filter "SamAccountName -eq '$sAMAccountName'" -Properties DistinguishedName
+                    if ($createdComputer) {
+                        Write-Host "Computer Created DistinguishedName=$($createdComputer.DistinguishedName)"
+                        Write-Log "Computer Created: sAMAccountName=${sAMAccountName}, DistinguishedName=$($createdComputer.DistinguishedName)"
+                    } else {
+                        Write-Host "Computer creation failed for ${sAMAccountName}; skipping further property setting." -ForegroundColor Red
+                        Write-Log "Computer creation failed for sAMAccountName=${sAMAccountName}; skipping further property setting."
+                        continue
+                    }
+
+                    # Set additional properties using Set-ADComputer
+                    $additionalProperties = @{
+                        Description            = $comp.Description
+                        Location               = $comp.Location
+                        ManagedBy              = $managedByDN
+                        OperatingSystem        = $comp.OperatingSystem        # Will be overwritten on actual computer join
+                        OperatingSystemVersion = $comp.OperatingSystemVersion # Will be overwritten on actual computer join
+                        DNSHostName            = $comp.DNSHostName            # Will be overwritten on actual computer join
+                        # Define other properties here if needed
+                    }
+
+                    foreach ($property in $additionalProperties.Keys) {
+                        if ($additionalProperties[$property] -ne $null -and $additionalProperties[$property] -ne "") {
+                            $params = @{
+                                Identity = $sAMAccountName
+                            }
+                            $params[$property] = $additionalProperties[$property]
+                            Try {
+                                Set-ADComputer @params
+                                Write-Host "  => Property $property set for computer: $sAMAccountName"
+                                Write-Log "Property $property set for computer: sAMAccountName=$sAMAccountName"
+                            } Catch {
+                                Write-Host "Warning: Failed to set property $property for computer ${sAMAccountName}" -ForegroundColor Yellow
+                                Write-Log "Failed to set property $property for computer: sAMAccountName=$sAMAccountName, ${property}='$($additionalProperties[$property])' - $_"
+                            }
+                        }
+                    }
+
+                    # Disable computer account if source userAccountControl has disabled bit
+                    if ([int]$comp.userAccountControl -band 2) {
+                        try {
+                            Disable-ADAccount -Identity $sAMAccountName
+                            Write-Host "  => Account disabled: $sAMAccountName"
+                            Write-Log "Account disabled: sAMAccountName=$sAMAccountName"
+                        } catch {
+                            Write-Error "Failed to disable computer account ${sAMAccountName}: $_"
+                            Write-Log "Failed to disable computer account: sAMAccountName=$sAMAccountName - $_"
+                        }
+                    }
+
+                    # Add this computer to groups
+                    $memberOfGroups = $comp.MemberOf -split ';'
+                    foreach ($mgrp in $memberOfGroups) {
+                        if ($mgrp -ne "") {
+                            try {
+                                $newDN = Get-NewDN -originalDN $mgrp -DNPath $DNPath
+
+                                Add-ADGroupMember -Identity $newDN -Members $($createdComputer.DistinguishedName)
+                                Write-Host "Added computer $sAMAccountName to group: $newDN"
+                                Write-Log "Computer: sAMAccountName=$sAMAccountName added to group: $newDN"
+                            } catch {
+                                Write-Host "Failed to add computer $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
+                                Write-Log "Failed to add computer sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                            }
+                        }
+                    }
+                }
+                else {
+                    Write-Host "Computer $sAMAccountName already exists; skipping import"
+                    Write-Log "Computer Skipped (Already Exists): sAMAccountName=$sAMAccountName"
                 }
             }
         }
@@ -1034,7 +1277,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
             exit 1
         }
 
-        $DNPath = ConvertPrefixToDNPath -prefix $DNPrefix -DCDepth $DCDepth
+        $DNPath = ConvertPrefixToDNPath -prefix $DNPrefix -depth $DCDepth
         if (-not $DNPath) {
             Write-Error "Error occurred while converting DNPrefix to DNPath"
             exit 1
@@ -1054,13 +1297,13 @@ Review your CSV. To override this check, use -NoClassCheck.)
         Write-Host $trimMsg
         Write-Log $trimMsg
     }
-    if ($NoUsersContainer) {
-        Write-Host "Option: 'NoUsersContainer' enabled"
-        Write-Log  "Option: 'NoUsersContainer' enabled"
+    if ($NoDefaultContainer) {
+        Write-Host "Option: 'NoDefaultContainer' enabled"
+        Write-Log  "Option: 'NoDefaultContainer' enabled"
     }
-    if ($NoForceUsersContainer) {
-        Write-Host "Option: 'NoForceUsersContainer' enabled"
-        Write-Log  "Option: 'NoForceUsersContainer' enabled"
+    if ($NoForceDefaultContainer) {
+        Write-Host "Option: 'NoForceDefaultContainer' enabled"
+        Write-Log  "Option: 'NoForceDefaultContainer' enabled"
     }
     if ($PSBoundParameters.ContainsKey('NewUPNSuffix')) {
         $upnMsg = "Option: 'NewUPNSuffix' specified: $NewUPNSuffix"
@@ -1079,16 +1322,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
             exit 1
         }
 
-        # Warn if looks like a user file
-        $groupFileName = Split-Path $GroupFile -Leaf
-        if ($groupFileName -match '(?i)(^|[._ -])user([._ -]|s|$)') {
-            Write-Host "Warning: The group file name implies it is a user data file." -ForegroundColor Yellow
-            $resp = Read-Host "Continue anyway? [Y]/N"
-            if ($resp -and $resp -match '^(n|no)$') {
-                Write-Host "Aborted by user." -ForegroundColor Yellow
-                exit 1
-            }
-        }
+        # Warn if filename looks like other modes
+        if (FileName-WrongType-Warn -FilePath $GroupFile -MyType "group") { exit 1 }
 
         Write-Host "Group File Path: $GroupFile"
         Write-Log "Group File Path: $GroupFile"
@@ -1106,23 +1341,34 @@ Review your CSV. To override this check, use -NoClassCheck.)
             exit 1
         }
 
-        # Warn if looks like a group file
-        $userFileName = Split-Path $UserFile -Leaf
-        if ($userFileName -match '(?i)(^|[._ -])group([._ -]|s|$)') {
-            Write-Host "Warning: The user file name implies it is a group data file." -ForegroundColor Yellow
-            $resp = Read-Host "Continue anyway? [Y]/N"
-            if ($resp -and $resp -match '^(n|no)$') {
-                Write-Host "Aborted by user." -ForegroundColor Yellow
-                exit 1
-            }
-        }
+        # Warn if filename looks like other modes
+        if (FileName-WrongType-Warn -FilePath $UserFile -MyType "user") { exit 1 }
 
         Write-Host "User File Path: $UserFile"
         Write-Log "User File Path: $UserFile"
         Import-ADObject -filePath $UserFile -objectClass "user"
     }
 
-    # Group Fixup/Fixate Mode
+    # Computer Data Import Mode
+    if ($computerMode) {
+        # Select the computer file if not specified
+        if (-not $ComputerFile) {
+            $ComputerFile = Select-Input-File -type "computer"
+        }
+        if (-not (Test-Path $ComputerFile)) {
+            Write-Error "Specified ComputerFile does not exist"
+            exit 1
+        }
+
+        # Warn if filename looks like other modes
+        if (FileName-WrongType-Warn -FilePath $ComputerFile -MyType "computer") { exit 1 }
+
+        Write-Host "Computer File Path: $ComputerFile"
+        Write-Log "Computer File Path: $ComputerFile"
+        Import-ADObject -filePath $ComputerFile -objectClass "computer"
+    }
+
+    # Group Fix Mode
     if ($fixGroupMode) {
         # Select the group file if not specified
         if (-not $GroupFile) {
@@ -1133,16 +1379,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
             exit 1
         }
 
-        # Warn if looks like a user file
-        $groupFileName = Split-Path $GroupFile -Leaf
-        if ($groupFileName -match '(?i)(^|[._ -])user([._ -]|s|$)') {
-            Write-Host "Warning: The group file name implies it is a user data file." -ForegroundColor Yellow
-            $resp = Read-Host "Continue anyway? [Y]/N"
-            if ($resp -and $resp -match '^(n|no)$') {
-                Write-Host "Aborted by user." -ForegroundColor Yellow
-                exit 1
-            }
-        }
+        # Warn if filename looks like other modes
+        if (FileName-WrongType-Warn -FilePath $GroupFile -MyType "group") { exit 1 }
 
         Write-Host "Group File Path: $GroupFile"
         Write-Log "Group File Path: $GroupFile"
