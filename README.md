@@ -5,7 +5,7 @@
 export-ADData is a flexible PowerShell toolkit for exporting and importing Active Directory users and groups. Easily convert AD data to CSV and back, with advanced import features for cross-domain migration, OU reorganization, granular mapping, and robust validation. Ideal for admins managing AD at scale.
 
 - **`export-ADData`**: Export Active Directory (AD) users, groups, and computers to CSV files with flexible options.
-- **`import-ADData`**: Import AD users and groups from CSV files, supporting migration, OU reorganization, cross-domain moves, flattening, and detailed mapping.
+- **`import-ADData`**: Import AD users, groups, and computers from CSV files, supporting migration, OU reorganization, cross-domain moves, flattening, and detailed mapping.
 - **`compare-ADCSV`**: Compare two AD export CSVs for verification.
 - **`check-ADUserPassword`**: Check AD user password validity.
 
@@ -39,6 +39,8 @@ There are four major strategies for combining export and import:
 4. **Export specifying "OU=sales,DC=domain,DC=local" and import to "DC=domain,DC=local" with `-TrimOU sales`**  
    Useful for flattening part of the OU hierarchy. By exporting from a specific OU and importing to the domain root with `-TrimOU`, you can migrate only the objects under that OU directly to the root (or another OU), effectively removing their original OU nesting.
 
+> More advanced use is possible. For example, if you export from "OU=sales,DC=domain,DC=local", and import into "OU=marketing,DC=domain,DC=local" with the `-TrimOU "sales"` option, you can effectively move objects from the "sales" OU to the "marketing" OU in a two-step process—without manually editing every DN in the exported CSV data.
+
 > See [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) for a step-by-step guide on preparing CSV files for import/export.
 
 ---
@@ -70,16 +72,19 @@ Exports users, groups, and computers from Active Directory to CSV files using a 
 | `-Computer`           | `-comp`   | No       | Export Computers only. Users and Groups are not processed.                                            |
 | `-ExcludeSystemObject`| `-nosys`  | No       | Exclude system users/groups from export.                                                              |
 
-> \*Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
+> \* Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
 
 #### Usage Examples
 
 ```powershell
-# Export AD Users and Groups from the Domain basis to CSV files in "C:\ADExport"
-.\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -OutPath "C:\ADExport"
+# Export AD Users and Groups from the Domain root to CSV files in "C:\ADExport", excluding system objects
+.\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -OutPath "C:\ADExport" -ExcludeSystemObject
 
-# Export AD Users and Groups using DNPrefix (not recommended for accuracy)
-.\export-ADData.ps1 -DNPrefix "unit.mydomain.local" -OutPath "C:\ADExport"
+# Export AD Users and Groups, specifying a specific hierarchy base.
+.\export-ADData.ps1 -DNPath "OU=unit,DC=mydomain,DC=local" -OutPath "C:\ADExport"
+
+# Export AD Computers from the domain root, making the script prompt for output folder via dialog
+.\export-ADData.ps1 -DNPath "DC=mydomain,DC=local" -Computer
 ```
 
 ---
@@ -88,21 +93,21 @@ Exports users, groups, and computers from Active Directory to CSV files using a 
 
 #### Overview
 
-Imports AD users and groups from CSV files, supporting domain migration, OU reorganization, and advanced mapping features. Automatically creates missing OUs and can handle a wide range of migration scenarios.
+Imports AD users, groups, and computers from CSV files, supporting domain migration, OU reorganization, and advanced mapping features. Automatically creates missing OUs and can handle a wide range of migration scenarios.
 
 #### Key Features
 
-- Import AD Users and Groups from CSV files (`-User` and `-Group` mode).
+- Import AD Users, Groups, and Computers from CSV files (`-User`, `-Group` and `-Computer` mode).
 - Register `ManagedBy` attribute for Groups separately in a dedicated run (`-FixGroup` mode).
 - Optionally include system objects.
-- Handle objects in `CN=Users` container specially and appropriately, redirecting them to a designated OU when needed.
+- Handle objects in "Default" container (`CN=Users`, `CN=Computers`) specially and appropriately, redirecting them to a designated OU when needed.
 - Create missing intermediate OUs during the import.
 - Detailed logging of import operations.
 - Never overwrite existing Users/Groups. Warn and skip in each case.
 - Option to disable "protect from accidental deletion" for newly created OUs, useful for pre-validation etc.
 - Supports registering user passwords if provided in the CSV.
-- Advanced features for OU trimming and control over `Users` container placement (`-TrimOU`, `-NoUsersContainer`, `-NoForceUsersContainer`).
-- Mode vs file mismatch detection: Warns and prompts if the selected CSV file suggests a mismatch with the chosen import mode (e.g., a group import with a user data file), helping avoid accidental mis-imports. Contents check can be bypassed with `-NoClassCheck` switch for more flexible or advanced import scenarios.
+- Advanced features for OU trimming and control over "Default" container placement (`-TrimOU`, `-NoDefaultContainer`, `-NoForceDefaultContainer`).
+- Mode vs file mismatch detection: By default, the script checks both the file name and the `ObjectClass` column in your CSV file to ensure it matches the selected import mode (user, group, or computer). If a mismatch is detected, you are warned before import begins. The `-NoClassCheck` switch disables only the check on the `ObjectClass` column; filename check is always enabled.
 
 #### Parameters
 
@@ -115,14 +120,16 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 | `-UserFile`               | `-uf`   | No       | Path to user CSV file. Dialog prompts if omitted and `-User` is set.                                  |
 | `-Group`                  | `-g`    | No       | Import mode for groups. Implied if `-GroupFile` specified.                                            |
 | `-GroupFile`              | `-gf`   | No       | Path to group CSV file. Dialog prompts if omitted and `-Group` is set.                                |
+| `-Computer`               | `-c`    | No       | Import mode for computers. Implied if `-ComputerFile` specified.                                      |
+| `-ComputerFile`           | `-cf`   | No       | Path to computer CSV file. Dialog prompts if omitted and `-Computer` is set.                          |
 | `-FixGroup`               |         | No       | Operates in a post-import fixup mode for existing groups. Run after user and group imports. This sets `ManagedBy` references that require prior import of users/groups. See note below. |
-| `-NoClassCheck`           |         | No       | Disables automatic checking of the CSV's ObjectClass column for consistency with the selected import mode (user or group). Use with caution. |
+| `-NoClassCheck`           |         | No       | By default, this script checks that all records in the input file have an `ObjectClass` matching the selected import mode (user, group, or computer). This switch disables the `ObjectClass` column check, allowing you to import files that are missing the column or contain mixed/incorrect types. Filename-based mode checks are always performed. Only use this if you know what you are doing. |
 | `-IncludeSystemObject`    |         | No       | Import critical system users/groups (normally dangerous).                                             |
 | `-NewUPNSuffix`           |         | No       | New suffix for UserPrincipalName. Defaults to value derived from `-DNPath`.                           |
 | `-NoProtectNewOU`         |         | No       | Newly created OUs will not be protected from accidental deletion.                                     |
 | `-TrimOU`                 |         | No       | Remove one or more rightmost (nearest the domain root) OUs from source DNs before import.             |
-| `-NoUsersContainer`       |         | No       | Place users/groups with no OU or in `Users` container directly under the domain root instead of `CN=Users,DC=...`.            |
-| `-NoForceUsersContainer`  |         | No       | Import objects as their DN dictates: if the DN is directly under the domain root, import as is; if under `Users` container, import as is. Mutually exclusive with `-NoUsersContainer`. |
+| `-NoDefaultContainer`     |         | No       | Place users/groups/computers with no OU or in "Default" container, i.e., `CN=Users` or `CN=Computers`, directly under the domain root. |
+| `-NoForceDefaultContainer` |         | No       | Import objects as their DN dictates: if the DN is directly under the domain root, import as is; if under default container e.g., `CN=Users,DC=...`, import as is. Mutually exclusive with `-NoDefaultContainer`. |
 
 > \*Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
 
@@ -130,7 +137,7 @@ Imports AD users and groups from CSV files, supporting domain migration, OU reor
 
 ##### Note about `-FixGroup` mode
 
-`-FixGroup` enables a special post-import operation to set the `ManagedBy` property on groups, using the same GroupFile as in the import step. This is necessary because `ManagedBy` typically references user objects, which must already exist in the target AD. This mode does not create or remove any groups or users—it only updates the `ManagedBy` property for existing groups, mapping references according to the `-DNPath`, and advanced options (such as `-TrimOU`, `-NoUsersContainer`, etc.).
+`-FixGroup` enables a special post-import operation to set the `ManagedBy` property on groups, using the same GroupFile as in the import step. This is necessary because `ManagedBy` typically references user objects, which must already exist in the target AD. This mode does not create or remove any groups or users—it only updates the `ManagedBy` property for existing groups, mapping references according to the `-DNPath`, and advanced options (such as `-TrimOU`, `-NoDefaultContainer`, etc.).
 
 - `-FixGroup` is mutually exclusive with user/group import modes.
 - Requires a valid `-GroupFile` (prompted if omitted).
@@ -154,7 +161,7 @@ This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OU
 - Only plain OU names are allowed. Do not use `OU=` prefix, full DN fragments, or any other prefix.
 - Trimming only occurs if the source DN ends with the specified OU sequence (the right-most/nearest to domain root), and the match must be in exact order.
 - Trimming never removes `DC`, `CN`, or any components other than OUs.
-- The following are reserved words and are **not permitted as OU names in the `-TrimOU` argument**: `ou`, `cn`, `dc`, `users`, `=` (case-insensitive match; `=` is not permitted anywhere in the name).  
+- The following are reserved words and are **not permitted as OU names in the `-TrimOU` argument**: `ou`, `cn`, `dc`, `users`, `computers`, `=` (case-insensitive match; `=` is not permitted anywhere in the name).  
   *Note: This is a local rule for this script, not a restriction imposed by Active Directory itself (except for `=`), but it prevents confusion and scripting errors.*
 - Empty patterns (e.g., `,,`) are invalid.
 - If any invalid name is detected, the script will abort with an error.
@@ -174,19 +181,19 @@ This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OU
 
 ---
 
-##### -NoUsersContainer and -NoForceUsersContainer
+##### -NoDefaultContainer and -NoForceDefaultContainer
 
-By default, users and groups that would otherwise be created directly under the domain root are placed in the domain's default container (`CN=Users,DC=...`).  
-If you specify `-NoUsersContainer`, such objects are instead created directly under the domain root (`DC=...`).  
-If you specify `-NoForceUsersContainer`, objects are imported exactly as their DN dictates:  
+By default, users, groups, and computers that would otherwise be created directly under the domain root are placed in the domain's "Default" container (`CN=Users,DC=...` for users and groups, `CN=Computers` for computers).  
+If you specify `-NoDefaultContainer`, such objects are instead created directly under the domain root (`DC=...`).  
+If you specify `-NoForceDefaultContainer`, objects are imported exactly as their DN dictates:  
 - If the DN was originally directly under the domain root, it is imported there.
-- If the DN was originally under the `Users` container, it remains in `Users`.
+- If the DN was originally under the default container, it remains in it.
 
 This behavior also applies in cases where the resulting DN path ends up directly under the domain root, such as when all OUs are removed from an object's original DN by the `-TrimOU` option.
 
 **Precautions:**
 - These parameters are **mutually exclusive**; you must specify only one or neither.
-- Placing users or groups directly under the domain root is valid but not recommended for most environments.
+- Placing users, groups, or computers directly under the domain root is valid but not recommended for most environments.
 - Use these options only if you are sure this is what you want.
 
 ---
@@ -228,6 +235,16 @@ The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence
 
 ---
 
+##### ManagedBy Property: Mapping and Container Handling
+
+When importing or registering the `ManagedBy` property, especially with advanced options or when targeting default containers, the destination OU or container for the referenced object may not match your expectations due to mapping rules and option interactions (such as `-TrimOU` or `-NoDefaultContainer`).  
+**A common issue** is that the Distinguished Name (DN) in the `ManagedBy` field of the source CSV may not correspond to the DN of any imported user or group in the target AD. For example, if a computer object is imported into `OU=sales,DC=domain,DC=local`, but its `ManagedBy` value in the source CSV is `CN=Manager,DC=domain,DC=local`, the registration will fail unless a user with that exact DN exists in the destination AD.
+
+If you encounter unexpected placements or registration failures, review your DN mapping and advanced parameters.  
+You may need to adjust specific CSV records (for example, update the `ManagedBy` DN to match the actual imported user's DN), or hand register the `ManagedBy` property after import to achieve the intended outcome.
+
+---
+
 #### Usage Examples
 
 ```powershell
@@ -238,19 +255,19 @@ The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence
 .\import-ADData.ps1 -DNPath "OU=osaka,DC=newdomain,DC=local" -User
 # NOTE: You must create the **base** OU "osaka" in the destination AD before running the import, if it does not already exist.
 
-# Import AD Users and Groups, using default (safe) policy: OU objects without OU go onto CN=Users
-.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -GroupFile "Groups.csv"
+# Import AD Computers from CSV
+.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -ComputerFile "C:\Exp\Computers_olddomain_local.csv"
 
 # Import users, trimming two rightmost OUs and placing directly under domain root (not in CN=Users)
-.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoUsersContainer
+.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users_deeper_sales_domain_local.csv" -TrimOU "deeper,sales" -NoDefaultContainer
 
 # Import users, preserving DN structure (Users container or domain root) as-is
-.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -NoForceUsersContainer
+.\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -NoForceDefaultContainer
 ```
 
 ##### Registering ManagedBy after User/Group Import
 
-To set the `ManagedBy` property for groups after importing users and groups, run the following sequence. Be sure to use the same `-DNPath` and advanced options (such as `-TrimOU`, `-NoUsersContainer`, etc.) for all runs to ensure DN mapping is consistent.
+To set the `ManagedBy` property for groups after importing users and groups, run the following sequence. Be sure to use the same `-DNPath` and advanced options (such as `-TrimOU`, `-NoDefaultContainer`, etc.) for all runs to ensure DN mapping is consistent.
 
 ```powershell
 # Import groups
@@ -266,7 +283,7 @@ To set the `ManagedBy` property for groups after importing users and groups, run
 #### Best Practices and Safety Tips
 
 - Always verify the target DNPath and perform a test import before running in production.
-- Use `-NoUsersContainer` with caution; placing users or groups directly under the domain root can cause confusion in large AD environments. Many AD tools and scripts—including some Microsoft tools—do not expect or properly handle such objects.
+- Use `-NoDefaultContainer` with caution; placing users or groups directly under the domain root can cause confusion in large AD environments. Many AD tools and scripts—including some Microsoft tools—do not expect or properly handle such objects.
 - Some group-to-group memberships may fail to register during bulk group import due to the order of records in the CSV. In such cases, manual intervention may be required (e.g., remove the failed groups and rerun the import using the same CSV).
 
 ---
