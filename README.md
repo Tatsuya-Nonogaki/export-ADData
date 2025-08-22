@@ -292,11 +292,11 @@ To set the `ManagedBy` property for groups after importing users and groups, run
 
 #### Overview
 
-Compares two CSV exports of AD users or groups, helping you verify changes, migrations, or synchronization.
+Compares two CSV exports of AD users, groups or computers, helping you verify changes, migrations, or synchronization.
 
 #### Key Features
 
-- Compare two CSV files of AD users or groups.
+- Compare two CSV files of AD users, groups, or computers.
 - Comparison is done with sAMAccountName as the key, without being affected by the order of records in the CSV file, unlike ordinary "diff" tools.
 - Detects and outputs records where there is a difference in DistinguishedName, MemberOf, or when an entry is present only on one side.
 - For user CSVs, differences in `Enabled` and `PasswordNeverExpires` are also checked and reported, but these fields are considered auxiliary and do not affect the main inclusion criteria.
