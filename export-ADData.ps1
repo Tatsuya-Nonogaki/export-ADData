@@ -4,7 +4,7 @@
  
  .DESCRIPTION
   Exports users, groups, and computers from Active Directory to CSV files.
-  Version: 0.8.0
+  Version: 0.8.1
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -121,35 +121,43 @@ process {
     function ConvertPrefixToDNPath {
         param (
             [string]$prefix,
-            [int]$DCDepth
+            [int]$depth
         )
+
         $domainParts = $prefix.Split('.')
         if ($domainParts.Count -lt 2) {
             Write-Error "Invalid prefix format: Expected at least two domain components (e.g., mydomain.local)"
             exit 1
         }
-        if ($DCDepth -lt 1 -or $DCDepth -gt $domainParts.Count) {
+        if ($depth -lt 1 -or $depth -gt $domainParts.Count) {
             Write-Error "Invalid DCDepth: It must be at least 1 and at most the total number of domain components."
             exit 1
         }
 
-        $DNPath = ""
+        $dnForm = ""
 
-        # Assume DC are the last DCDepth elements
-        $dcParts = $domainParts[-$DCDepth..-1]
+        # Assume DC are the last depth elements
+        $dcParts = $domainParts[-$depth..-1]
 
         # Assume the shallower elements are OU
-        $ouParts = $domainParts[0..($domainParts.Count - $DCDepth - 1)]
+        $ouEnd = $domainParts.Count - $DCDepth - 1
+        if ($ouEnd -ge 0) {
+            $ouParts = $domainParts[0..$ouEnd]
+        } else {
+            $ouParts = @()
+        }
+        if ($ouParts -is [string]) { $ouParts = @($ouParts) }
 
-        foreach ($ou in [array]::Reverse($ouParts)) {
-            $DNPath += "OU=$ou,"
+        [array]::Reverse($ouParts)
+        foreach ($ou in $ouParts) {
+            $dnForm += "OU=$ou,"
         }
 
         foreach ($dc in $dcParts) {
-            $DNPath += "DC=$dc,"
+            $dnForm += "DC=$dc,"
         }
 
-        return $DNPath.TrimEnd(',')
+        return $dnForm.TrimEnd(',')
     }
 
     # Determine output folder path
