@@ -22,7 +22,7 @@
 
    - For Groups (save if you want as i.e., headers-slim-Groups.csv; for Excel processing, local encoding like ShiftJIS may be appropriate):  
      **Minimal**  
-     `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
+     `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
 
      **Note:** Some columns e.g., DisplayName, HomePage, ObjectCategory, CN are not used in `import-ADData.ps1` for now. But we recommend to keep these for your reference or future utilization.
 
