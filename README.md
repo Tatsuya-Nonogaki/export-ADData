@@ -238,7 +238,8 @@ The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence
 ##### ManagedBy Property: Mapping and Container Handling
 
 When importing or registering the `ManagedBy` property, especially with advanced options or when targeting default containers, the destination OU or container for the referenced object may not match your expectations due to mapping rules and option interactions (such as `-TrimOU` or `-NoDefaultContainer`).  
-**A common issue** is that the Distinguished Name (DN) in the `ManagedBy` field of the source CSV may not correspond to the DN of any imported user or group in the target AD. For example, if a computer object is imported into `OU=sales,DC=domain,DC=local`, but its `ManagedBy` value in the source CSV is `CN=Manager,DC=domain,DC=local`, the registration will fail unless a user with that exact DN exists in the destination AD.
+**A common issue** is that the Distinguished Name (DN) in the `ManagedBy` field of the source CSV may not correspond to the DN of any imported user or group in the target AD. For example, if a computer object is imported into `OU=sales,DC=domain,DC=local`, but its `ManagedBy` value in the source CSV is directly on the domain-root (DC=domain,DC=local). The registration will fail unless a user with that exact DN exists in the destination AD.  
+> **Note:** It is also impossible to register `ManagedBy` if it refers to a `Contact` object, which is currently out of scope for this script.
 
 If you encounter unexpected placements or registration failures, review your DN mapping and advanced parameters.  
 You may need to adjust specific CSV records (for example, update the `ManagedBy` DN to match the actual imported user's DN), or hand register the `ManagedBy` property after import to achieve the intended outcome.
