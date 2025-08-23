@@ -23,7 +23,7 @@
 
    - グループ用（必要なら headers-slim-Groups.csv として保存。Excel作業用ならShiftJIS等のローカルエンコーディングでも可）：  
      **最小限**  
-     `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`
+     `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
 
      **注:** DisplayName, HomePage, ObjectCategory, CN など一部の列は現状 `import-ADData.ps1` では使用されませんが、作業中に参考にしたり将来の活用に備えて、保持しておくことをお勧めします。
 
