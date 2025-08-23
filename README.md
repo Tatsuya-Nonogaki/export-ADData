@@ -2,7 +2,7 @@
 
 ## Overview
 
-export-ADData is a flexible PowerShell toolkit for exporting and importing Active Directory users and groups. Easily convert AD data to CSV and back, with advanced import features for cross-domain migration, OU reorganization, granular mapping, and robust validation. Ideal for admins managing AD at scale.
+export-ADData is a flexible PowerShell toolkit for exporting and importing Active Directory accounts. Easily convert AD data to CSV and back, with advanced import features for cross-domain migration, OU reorganization, granular mapping, and robust validation. Ideal for admins managing AD at scale.
 
 - **`export-ADData`**: Export Active Directory (AD) users, groups, and computers to CSV files with flexible options.
 - **`import-ADData`**: Import AD users, groups, and computers from CSV files, supporting migration, OU reorganization, cross-domain moves, flattening, and detailed mapping.
@@ -265,7 +265,7 @@ You may need to adjust specific CSV records (for example, update the `ManagedBy`
 .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -NoForceDefaultContainer
 ```
 
-##### Registering ManagedBy after User/Group Import
+##### Registering ManagedBy for Groups after User/Group Import
 
 To set the `ManagedBy` property for groups after importing users and groups, run the following sequence. Be sure to use the same `-DNPath` and advanced options (such as `-TrimOU`, `-NoDefaultContainer`, etc.) for all runs to ensure DN mapping is consistent.
 
