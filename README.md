@@ -39,7 +39,7 @@ There are four major strategies for combining export and import:
 4. **Export specifying "OU=sales,DC=domain,DC=local" and import to "DC=domain,DC=local" with `-TrimOU sales`**  
    Useful for flattening part of the OU hierarchy. By exporting from a specific OU and importing to the domain root with `-TrimOU`, you can migrate only the objects under that OU directly to the root (or another OU), effectively removing their original OU nesting.
 
-> More advanced use is possible. For example, if you export from "OU=sales,DC=domain,DC=local", and import into "OU=marketing,DC=domain,DC=local" with the `-TrimOU "sales"` option, you can effectively move objects from the "sales" OU to the "marketing" OU in a two-step process—without manually editing every DN in the exported CSV data.
+> More advanced use is possible. For example, if you export from "OU=sales,DC=domain,DC=local", and import into "OU=marketing,DC=domain,DC=local" with `-TrimOU "sales"` option, you can effectively move objects from the "sales" OU to the "marketing" OU in a two-step process—without manually editing every DN in the exported CSV data.
 
 > See [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) for a step-by-step guide on preparing CSV files for import/export.
 
@@ -65,12 +65,12 @@ Exports users, groups, and computers from Active Directory to CSV files using a 
 
 | Parameter             | Alias     | Required | Description                                                                                           |
 |-----------------------|-----------|----------|-------------------------------------------------------------------------------------------------------|
-| `-DNPath`             | `-p`      | Yes\*    | Base of the Domain hierarchy from which you want to retrieve objects. DistinguishedName form.          |
+| `-DNPath`             | `-p`      | Yes\*    | Base of the Domain hierarchy from which you want to retrieve objects. DistinguishedName form.         |
 | `-DNPrefix`           | `-d`      | Yes\*    | Alternative to `-DNPath`. Dotted format (e.g., `unit.domain.local`).                                  |
 | `-DCDepth`            |           | No       | Depth of DC components in `-DNPrefix` (default: 2).                                                   |
 | `-OutPath`            | `-o`      | No       | Folder path for output CSVs. Dialog prompts if omitted.                                               |
 | `-Computer`           | `-comp`   | No       | Export Computers only. Users and Groups are not processed.                                            |
-| `-ExcludeSystemObject`| `-nosys`  | No       | Exclude system users/groups from export.                                                              |
+| `-ExcludeSystemObject`| `-nosys`  | No       | Exclude system accounts from export.                                                                  |
 
 > \* Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
 
