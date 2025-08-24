@@ -198,7 +198,7 @@ This behavior also applies in cases where the resulting DN path ends up directly
 
 ---
 
-#### Password Handling, Account Enablement, and ChangePasswordAtLogon
+##### Password Handling, Account Enablement, and ChangePasswordAtLogon
 
 To set a password for users during import, add a `"Password"` column to your User CSV (this column is not present in the original export) and enter the desired password in plain text.
 
