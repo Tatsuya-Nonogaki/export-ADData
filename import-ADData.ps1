@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.0
+  Version: 1.0.1
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -50,6 +50,13 @@
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
+
+  Note: GroupCategory and GroupScope handling in Group Imports
+  These properties are normally sourced from the "groupType" column. However, recalculating 
+  the hexadecimal integer for "groupType" can be cumbersome when modifications are required.
+  To simplify this process, you may leave "groupType" blank or prefix its value with a 
+  hash ("#"). In these cases, the script will use the string columns "GroupCategory" and 
+  "GroupScope" instead.
 
  .PARAMETER GroupFile
   (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
@@ -981,20 +988,32 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         GroupScope     = "Global"        # modified later if necessary
                     }
 
-                    # Determine GroupCategory based on CSV values
-                    if ($grp.groupType -band 0x80000000) {
-                        $newGroupParams.GroupCategory = "Security"
+                    # Set GroupCategory and GroupScope based on the groupType column.
+                    # If groupType is blank, contains only spaces, or is prefixed with '#', use the GroupCategory and GroupScope string columns instead.
+                    if (
+                        -not $grp.groupType -or
+                        ($grp.groupType -is [string] -and ($grp.groupType.Trim() -eq "" -or $grp.groupType.StartsWith('#')))
+                    ) {
+                        # Use the values from the string columns directly
+                        foreach ($col in @("GroupCategory", "GroupScope")) {
+                            if ($grp.$col -and $grp.$col.Trim() -ne "") {
+                                $newGroupParams.$col = $grp.$col
+                            } else {
+                                Write-Host "Warning: '$col' column for group ${sAMAccountName} does not have a valid value" -ForegroundColor Yellow
+                                Write-Log "Warning: '$col' column for group ${sAMAccountName} does not have a valid value; The property may be set to unintended value"
+                            }
+                        }
                     } else {
-                        $newGroupParams.GroupCategory = "Distribution"
-                    }
-
-                    # Determine GroupScope based on CSV values
-                    if ($grp.groupType -band 0x2) {
-                        $newGroupParams.GroupScope = "Global"
-                    } elseif ($grp.groupType -band 0x4) {
-                        $newGroupParams.GroupScope = "DomainLocal"
-                    } elseif ($grp.groupType -band 0x8) {
-                        $newGroupParams.GroupScope = "Universal"
+                        # Determine based on groupType integers
+                        if ($grp.groupType -band 0x80000000) {
+                            $newGroupParams.GroupCategory = "Security"
+                        } else {
+                            $newGroupParams.GroupCategory = "Distribution"
+                        }
+ 
+                        if ($grp.groupType -band 0x2)     { $newGroupParams.GroupScope = "Global" }
+                        elseif ($grp.groupType -band 0x4) { $newGroupParams.GroupScope = "DomainLocal" }
+                        elseif ($grp.groupType -band 0x8) { $newGroupParams.GroupScope = "Universal" }
                     }
 
                     Try {
