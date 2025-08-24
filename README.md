@@ -246,6 +246,13 @@ You may need to adjust specific CSV records (for example, update the `ManagedBy`
 
 ---
 
+##### GroupCategory and GroupScope handling in Group Imports
+
+These properties are normally sourced from the `groupType` column. However, recalculating the hexadecimal integer for `groupType` can be cumbersome when modifications are required.  
+To simplify this process, you may leave `groupType` blank or prefix its value with a hash ("#"). In these cases, the script will use the string columns `GroupCategory` and `GroupScope` instead.
+
+---
+
 #### Usage Examples
 
 ```powershell
