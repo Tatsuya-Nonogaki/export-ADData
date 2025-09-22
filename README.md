@@ -25,7 +25,7 @@ The basic usage is to export Active Directory objects by specifying the domain r
 > You can also perform a **mass registration from scratch** by first preparing CSV templates—simply export data from any sample Active Directory environment to generate the CSV structure, then edit these files as needed. The name of the source domain does not matter, as the importer (`import-ADData.ps1`) can convert and map the objects to your new domain automatically.  
 
 > 💡 **Tips:**
-> Step-by-step guide to export and edit CSV files for successful imports is provided in the [`doc/`](doc/) folder:
+> Step-by-step guide to export and edit CSV files for successful imports is provided in the [`docs/`](docs/) folder:
 > - [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) `(GitHub Web) /` [*(GitHub Pages HTML)*](https://tatsuya-nonogaki.github.io/export-ADData/docs/HOWTO_prepare_CSV_data.html)
 > - [HOWTO_prepare_CSV_data_ja.md](docs/HOWTO_prepare_CSV_data_ja.md) `(GitHub Web) /` [*(GitHub Pages HTML)*](https://tatsuya-nonogaki.github.io/export-ADData/docs/HOWTO_prepare_CSV_data_ja.html)
 
