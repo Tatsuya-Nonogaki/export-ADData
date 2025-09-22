@@ -1,4 +1,4 @@
-# [export-ADData](https://github.com/Tatsuya-Nonogaki/export-ADData)
+# [Export-ADData](https://github.com/Tatsuya-Nonogaki/export-ADData)
 
 ## Overview
 
@@ -21,9 +21,13 @@ Subscribe to the commit feed (no login required):
 
 The basic usage is to export Active Directory objects by specifying the domain root or OU you wish to target. You are free to edit the exported CSV files—removing unwanted entries or making modifications—before using them as input for the import process. To assign passwords to users, add a "Password" column to the User CSV (this column is not present in the original export) and enter the desired passwords in plain text. Note that setting a password is required to properly restore the "Enabled" status of user accounts during import.
 
-> **Note:**  
+> 📝 **Note:**  
 > You can also perform a **mass registration from scratch** by first preparing CSV templates—simply export data from any sample Active Directory environment to generate the CSV structure, then edit these files as needed. The name of the source domain does not matter, as the importer (`import-ADData.ps1`) can convert and map the objects to your new domain automatically.  
-> [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) will be a help.
+
+> 💡 **Tips:**
+> Step-by-step guide to export and edit CSV files for successful imports is provided in the [`doc/`](doc/) folder:
+> - [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) `(GitHub Web) /` [*(GitHub Pages HTML)*](https://tatsuya-nonogaki.github.io/export-ADData/docs/HOWTO_prepare_CSV_data.html)
+> - [HOWTO_prepare_CSV_data_ja.md](docs/HOWTO_prepare_CSV_data_ja.md) `(GitHub Web) /` [*(GitHub Pages HTML)*](https://tatsuya-nonogaki.github.io/export-ADData/docs/HOWTO_prepare_CSV_data_ja.html)
 
 There are four major strategies for combining export and import:
 
@@ -40,8 +44,6 @@ There are four major strategies for combining export and import:
    Useful for flattening part of the OU hierarchy. By exporting from a specific OU and importing to the domain root with `-TrimOU`, you can migrate only the objects under that OU directly to the root (or another OU), effectively removing their original OU nesting.
 
 > More advanced use is possible. For example, if you export from "OU=sales,DC=domain,DC=local", and import into "OU=marketing,DC=domain,DC=local" with `-TrimOU "sales"` option, you can effectively move objects from the "sales" OU to the "marketing" OU in a two-step process—without manually editing every DN in the exported CSV data.
-
-> See [HOWTO_prepare_CSV_data.md](docs/HOWTO_prepare_CSV_data.md) for a step-by-step guide on preparing CSV files for import/export.
 
 ---
 
@@ -162,11 +164,11 @@ This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OU
 - Trimming only occurs if the source DN ends with the specified OU sequence (the right-most/nearest to domain root), and the match must be in exact order.
 - Trimming never removes `DC`, `CN`, or any components other than OUs.
 - The following are reserved words and are **not permitted as OU names in the `-TrimOU` argument**: `ou`, `cn`, `dc`, `users`, `computers`, `=` (case-insensitive match; `=` is not permitted anywhere in the name).  
-  *Note: This is a local rule for this script, not a restriction imposed by Active Directory itself (except for `=`), but it prevents confusion and scripting errors.*
+  📝 *This is a local rule for this script, not a restriction imposed by Active Directory itself (except for `=`), but it prevents confusion and scripting errors.*
 - Empty patterns (e.g., `,,`) are invalid.
 - If any invalid name is detected, the script will abort with an error.
-- **Note:** When specifying multiple OU names for `-TrimOU`, always enclose the list in quotes (single or double), for example: `-TrimOU "deeper,sales"`. This ensures PowerShell passes the entire list as a single argument.
-- **Note:** You should only specify an OU (or sequence of OUs) for `-TrimOU` that all entries have as their rightmost OUs.  
+- 📝 **Note:** When specifying multiple OU names for `-TrimOU`, always enclose the list in quotes (single or double), for example: `-TrimOU "deeper,sales"`. This ensures PowerShell passes the entire list as a single argument.
+- 📝 **Note:** You should only specify an OU (or sequence of OUs) for `-TrimOU` that all entries have as their rightmost OUs.  
   If you specify OUs that are not present in some entry's DN, only those matching entries will be trimmed. Others will retain their original hierarchy, which can lead to an inconsistent and fragmented OU structure in the imported domain.
 
 **Examples:**
@@ -239,7 +241,8 @@ The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence
 
 When importing or registering the `ManagedBy` property, especially with advanced options or when targeting default containers, the destination OU or container for the referenced object may not match your expectations due to mapping rules and option interactions (such as `-TrimOU` or `-NoDefaultContainer`).  
 **A common issue** is that the Distinguished Name (DN) in the `ManagedBy` field of the source CSV may not correspond to the DN of any imported user or group in the target AD. For example, if a computer object is imported into `OU=sales,DC=domain,DC=local`, but its `ManagedBy` value in the source CSV is directly on the domain-root (DC=domain,DC=local). The registration will fail unless a user with that exact DN exists in the destination AD.  
-> **Note:** It is also impossible to register `ManagedBy` if it refers to a `Contact` object, which is currently out of scope for this script.
+
+> 📝 **Note:** It is also impossible to register `ManagedBy` if it refers to a `Contact` object, which is currently out of scope for this script.
 
 If you encounter unexpected placements or registration failures, review your DN mapping and advanced parameters.  
 You may need to adjust specific CSV records (for example, update the `ManagedBy` DN to match the actual imported user's DN), or hand register the `ManagedBy` property after import to achieve the intended outcome.
