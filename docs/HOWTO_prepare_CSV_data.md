@@ -56,7 +56,7 @@
    ```
    Then run (if you are using Linux):  
    ```bash
-   grep -v -F exclude-users-regex.txt Users_domain_local-slim.csv > Users_domain_local-slim-mod.csv
+   grep -v -f exclude-users-regex.txt Users_domain_local-slim.csv > Users_domain_local-slim-mod.csv
    ```
    This produces a "mod" CSV with the specified entries excluded.  
    For Users, this file is the final form for use in import.
