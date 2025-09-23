@@ -56,7 +56,7 @@
    ```
    その後（Linuxの場合の例）：  
    ```bash
-   grep -v -F exclude-users-regex.txt Users_domain_local-slim.csv > Users_domain_local-slim-mod.csv
+   grep -v -f exclude-users-regex.txt Users_domain_local-slim.csv > Users_domain_local-slim-mod.csv
    ```
    これにより、指定したエントリを除外した"mod" CSVが作成されます。  
    ユーザーの場合、このファイルがインポート用の最終形になります。
