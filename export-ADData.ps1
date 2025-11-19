@@ -4,7 +4,7 @@
  
  .DESCRIPTION
   Exports users, groups, and computers from Active Directory to CSV files.
-  Version: 0.8.2
+  Version: 0.8.3
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -291,7 +291,7 @@ process {
         }
       } | 
       Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, `
-                    @{Name="Manager"; Expression={ if ($_.Manager) { (Get-ADUser -Identity $_.Manager).DistinguishedName } else { $null } }}, `
+                    @{Name="Manager"; Expression={ if ($_.Manager) { (Get-ADUser -Identity $_.Manager -ErrorAction SilentlyContinue).DistinguishedName } else { $null } }}, `
                     * -ExcludeProperty MemberOf, Manager | 
         Export-Csv -Path $userOutputFilePath -Encoding UTF8 -NoTypeInformation
         Write-Host "Exported AD Users to $userOutputFilePath"
