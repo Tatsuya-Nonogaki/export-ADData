@@ -4,7 +4,7 @@
  
  .DESCRIPTION
   Exports users, groups, and computers from Active Directory to CSV files.
-  Version: 0.8.1
+  Version: 0.8.2
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -243,9 +243,9 @@ process {
         # Specific system computer objects to exclude
         # You may extend $excludedComputers if necessary.
         # Critical system objects are dealt with by $ExcludeSystemObject parameter later on.
-        $excludedComputers = @()  
+        $excludedComputers = @()
 
-        Get-ADComputer -Filter * -Properties $computerExtraProps -SearchBase "$DNPath" |
+        Get-ADComputer -Filter * -Properties $computerExtraProps -SearchBase "$DNPath" | 
           Where-Object {
             if ($ExcludeSystemObject) {
                 if ($_.isCriticalSystemObject -eq "TRUE" -or $_.sAMAccountName -in $excludedComputers) {
@@ -257,8 +257,8 @@ process {
             } else {
                 return $true
             }
-          } |
-          Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf |
+          } | 
+          Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf | 
             Export-Csv -Path $computerOutputFilePath -Encoding UTF8 -NoTypeInformation
 
         Write-Host "Exported AD Computers to $computerOutputFilePath"
@@ -319,10 +319,10 @@ process {
                 return $true
             }
         } else {
-            return $true 
+            return $true
         }
       } | 
-      Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf |
+      Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf | 
         Export-Csv -Path $groupOutputFilePath -Encoding UTF8 -NoTypeInformation
         Write-Host "Exported AD Groups to $groupOutputFilePath"
 
