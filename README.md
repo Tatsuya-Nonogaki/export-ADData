@@ -63,6 +63,15 @@ Exports users, groups, and computers from Active Directory to CSV files using a 
 - Supports specifying the export base via Distinguished Name (`-DNPath`) or dotted prefix (`-DNPrefix`).
 - Flexible output path selection.
 
+> 📝 **Note:**  
+> The bundled `export-ADData-PS2.ps1` is a variant provided for exporting AD data from older Windows Server systems that ship with PowerShell 2.0 (for example, Windows Server 2008 R2). It replaces the following logic with PS2-compatible alternatives:  
+> - The `-in` operator, which was introduced in PowerShell 3.0 and is not available in PowerShell 2.0.  
+> - The use of `Export-Csv` with `-Encoding` parameter, which can be unreliable on PowerShell 2.0.  
+>  
+> The PS2 variant is distributed as UTF‑8 without BOM and contains only ASCII; normally, no encoding conversion is required. If you add non‑ASCII characters or encounter issues on PowerShell 2.0, re‑save the script as UTF‑8 with BOM or in the target system's ANSI encoding (e.g., CP932/Shift_JIS for Japanese Windows).  
+>  
+> Please be aware that this PS2 variant may not be kept in sync with subsequent updates to the main `export-ADData.ps1`.
+
 #### Parameters
 
 | Parameter             | Alias     | Required | Description                                                                                           |
