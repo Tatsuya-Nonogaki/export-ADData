@@ -4,7 +4,7 @@
  
  .DESCRIPTION
   Exports users, groups, and computers from Active Directory to CSV files.
-  Version: 0.8.3 (PowerShell-2.0 compatible edition)
+  Version: 0.8.3.1 (PowerShell-2.0 compatible edition)
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -160,25 +160,6 @@ process {
         return $dnForm.TrimEnd(',')
     }
 
-    # helper: Export CSV and ensure UTF8 (works on PS2 and PS3+)
-    function Export-Csv-EnsureUtf8 {
-        param(
-            [Parameter(Mandatory=$true)][string]$Path,
-            [Parameter(Mandatory=$true)][object]$InputObject
-        )
-
-        # Export to a temp file first
-        $temp = $Path + ".tmp"
-        $InputObject | Export-Csv -Path $temp -NoTypeInformation
-
-        # Read and write with .NET to ensure UTF8 BOM
-        $content = Get-Content $temp | Out-String
-        [System.IO.File]::WriteAllText($Path, $content, [System.Text.Encoding]::UTF8)
-
-        # remove temp
-        Remove-Item $temp -ErrorAction SilentlyContinue
-    }
-
     # Determine output folder path
     function Select-OutputFolderPath {
         $outputFolderPath = ""
@@ -281,8 +262,7 @@ process {
             }
           } | Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf
 
-        # Export ensuring UTF8
-        Export-Csv-EnsureUtf8 -Path $computerOutputFilePath -InputObject $computers
+        $computers | Export-Csv -Path $computerOutputFilePath -Encoding UTF8 -NoTypeInformation
 
         Write-Host "Exported AD Computers to $computerOutputFilePath"
 
@@ -321,8 +301,7 @@ process {
                     @{Name="Manager"; Expression={ if ($_.Manager) { (Get-ADUser -Identity $_.Manager -ErrorAction SilentlyContinue).DistinguishedName } else { $null } }}, `
                     * -ExcludeProperty MemberOf, Manager
 
-    # Export ensuring UTF8
-    Export-Csv-EnsureUtf8 -Path $userOutputFilePath -InputObject $users
+    $users | Export-Csv -Path $userOutputFilePath -Encoding UTF8 -NoTypeInformation
     Write-Host "Exported AD Users to $userOutputFilePath"
 
     # Export Groups
@@ -355,8 +334,7 @@ process {
         }
       } | Select-Object @{Name="MemberOf"; Expression={$_.MemberOf -join ";"}}, * -ExcludeProperty MemberOf
 
-    # Export ensuring UTF8
-    Export-Csv-EnsureUtf8 -Path $groupOutputFilePath -InputObject $groups
+    $groups | Export-Csv -Path $groupOutputFilePath -Encoding UTF8 -NoTypeInformation
     Write-Host "Exported AD Groups to $groupOutputFilePath"
 
 # End of process
