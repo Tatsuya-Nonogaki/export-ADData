@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.1
+  Version: 1.0.2
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -686,7 +686,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
         )
 
         if ($objectClass -eq "user") {
-            $excludedUsers = @("SUPPORT_388945a0")
+            $excludedUsers = @("SUPPORT_388945a0", "TsInternetUser")
 
             $users = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
