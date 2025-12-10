@@ -4,7 +4,7 @@
  
  .DESCRIPTION
   Exports users, groups, and computers from Active Directory to CSV files.
-  Version: 0.8.3
+  Version: 0.8.4
  
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth. 
@@ -275,7 +275,7 @@ process {
     $userExtraProps = "MemberOf", "EmailAddress", "HomePhone", "MobilePhone", "OfficePhone", "Title", "Department", "Manager", "LockedOut", "*"
 
     # Specific system user objects to exclude
-    $excludedUsers = @("SUPPORT_388945a0")
+    $excludedUsers = @("SUPPORT_388945a0", "TsInternetUser")
 
     Get-ADUser -Filter * -Properties $userExtraProps -SearchBase "$DNPath" | 
       Where-Object {
