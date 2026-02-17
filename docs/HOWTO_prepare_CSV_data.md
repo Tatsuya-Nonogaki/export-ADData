@@ -4,7 +4,7 @@
 
 ## Preparation Phase
 
-- Export the source Groups and Users from AD to CSV using `export-ADData.ps1`. At this time, system users and groups are unnecessary, except for the most special cases, so be sure to use the `-ExcludeSystemObject` option.
+- Export the source Groups and Users from AD to CSV using `export-ADData.ps1`. At this time, system users and groups are unnecessary, except for the most special cases, so be sure to use the `-ExcludeSystemObject` (`-nosys`) option.
 
 - Similarly, export from the import target AD using `-ExcludeSystemObject`. Even if your intended import target is a branch OU, always specify the base domain in `-DNPath` during export.
 
@@ -36,11 +36,12 @@
      **Minimal**  
      `MemberOf,Manager,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
 
-     📝 **Note:** Some columns e.g., CanonicalName, CN, codePage, HomePage, Initials, Organization, PrimaryGroup, sAMAccountType are not used in `import-ADData.ps1` for now. But we recommend to keep these for your reference or future utilization.
+     📝 **Note:**  
+     - Some columns e.g., CanonicalName, CN, codePage, HomePage, Initials, Organization, PrimaryGroup, sAMAccountType are not used in `import-ADData.ps1` for now. But we recommend to keep these for your reference or future utilization.
 
-     📝 **Note:** Add `"Password"` column if you need to register password for any user. (See site README or import-ADData.ps1 help.) Existence of this column does no harm because `import-ADData.ps1` ignores each Password field if it is blank.
+     - Add `"Password"` column if you need to register password for any user. (See site README or import-ADData.ps1 help.) Existence of this column does no harm because `import-ADData.ps1` ignores each Password field if it is blank.
 
-     📝 **Note:** You may also add a `"ChangePasswordAtLogon"` column to the user CSV to control whether users must change their password at next logon. Acceptable values are `TRUE`, `YES`, or `1` to enable, and `FALSE`, `NO`, or `0` to disable. This column takes precedence over the `userAccountControl` property for this setting. To activate this feature, you may have to use the `"Password"` column together with `"ChangePasswordAtLogon"`. For more details, see the README and `import-ADData.ps1` help.
+     - You may also add a `"ChangePasswordAtLogon"` column to the user CSV to control whether users must change their password at next logon. Acceptable values are `TRUE`, `YES`, or `1` to enable, and `FALSE`, `NO`, or `0` to disable. This column takes precedence over the `userAccountControl` property for this setting. To activate this feature, you may have to use the `"Password"` column together with `"ChangePasswordAtLogon"`. For more details, see the README and `import-ADData.ps1` help.
 
 3. **Users_domain_local-slim.xlsx (Groups_domain_local-slim.xlsx)**  
    Save this file after removing unnecessary columns.
