@@ -1,0 +1,1 @@
+^(.*Name$|^CN$|^SamAccountName$|^DisplayName$|^Group(Category|Scope)$|^groupType$)$

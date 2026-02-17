@@ -11,7 +11,7 @@
   When -Exclude is specified (exclude mode):
     - All columns *except* those listed in the column list are kept.
 
-  The column list can be provided in three ways:
+  The column list can be provided in four ways:
 
   1. No -ColumnFile:
      The built-in list (defined in the "Get-ColumnList" function) is used.
@@ -21,11 +21,22 @@
   3. -ColumnFile <file-path> with file extension .ps1:
      The file must define a variable named "$columnList", e.g.:
        $columnList = @("MemberOf", "CN", "Description", ...)
+  4. -ColumnFile <file-path> with file extension .txt:
+     The file should contain a single regular expression pattern used to match column names, e.g.:
+       ^(.*Name$|^CN$|^DisplayName$)$
+     In include mode (default), columns matching the pattern are kept.
+     In exclude mode (-Exclude), columns NOT matching the pattern are kept.
 
   NOTES:
   Input and output are processed via Import-Csv / Export-Csv.
   - Output is written with UTF-8 encoding and without type information.
   - For stable processing, the input file should also be encoded in UTF-8.
+
+  Sample column list files are provided under utils/filter-csv-columns:
+  - column_list.csv: Comma-separated list of AD group columns
+  - column_list.ps1: PowerShell array of AD group columns
+  - column_list.txt: Regular expression pattern (sample, may need adjustment for real usage)
+  These samples are aligned with Active Directory group data use-cases in this repository.
 
 .PARAMETER InFile
   (Alias -i) Mandatory. Path to the input CSV file.
@@ -37,6 +48,9 @@
   (Alias -c) Optional. Path to a column list definition file:
   - If it ends with .csv, it is treated as a comma-separated list of column names.
   - If it ends with .ps1, it must define a variable named $columnList.
+  - If it ends with .txt, it should contain a single regular expression pattern
+    that will be matched against column names (include mode keeps matching columns,
+    exclude mode keeps non-matching columns).
 
 .PARAMETER Exclude
   (Alias -x) Negates the column selection. When specified, the column list
@@ -74,6 +88,9 @@ param(
     [switch]$Exclude
 )
 
+# Script-level variable to track ColumnFile type
+$ColumnFileType = $null
+
 # --- Get list of columns (used as include-list or exclude-list)
 function Get-ColumnList {
     param(
@@ -90,7 +107,14 @@ function Get-ColumnList {
             "Description",
             "DisplayName",
             "DistinguishedName",
+            "GroupCategory",
+            "GroupScope",
+            "groupType",
+            "HomePage",
+            "isCriticalSystemObject",
+            "ManagedBy",
             "Name",
+            "ObjectCategory",
             "ObjectClass",
             "SamAccountName"
         )
@@ -120,8 +144,19 @@ function Get-ColumnList {
             }
         }
 
+        ".txt" {
+            # Regular expression pattern from text file
+            $script:ColumnFileType = "regex"
+            $pattern = Get-Content -Path $ColumnFilePath -Raw
+            $pattern = $pattern.Trim()
+            if ([string]::IsNullOrWhiteSpace($pattern)) {
+                throw "ColumnFile '$ColumnFilePath' is empty or contains only whitespace."
+            }
+            return @($pattern)
+        }
+
         default {
-            throw "Unsupported extension '$ext' for ColumnFile. Use '.csv' or '.ps1'."
+            throw "Unsupported extension '$ext' for ColumnFile. Use '.csv', '.ps1', or '.txt'."
         }
     }
 }
@@ -143,22 +178,45 @@ try {
 
     $allColumns = $data[0].PsObject.Properties.Name
 
-    if ($Exclude) {
-        # Exclude mode: keep columns that are NOT listed in columnList
-        $validKeep = $allColumns | Where-Object { $_ -notin $columnList }
-        if (-not $validKeep -or $validKeep.Count -eq 0) {
-            $listed = $columnList -join ", "
-            throw "Exclude mode is enabled, but all columns are listed in ColumnFile (nothing to keep). Listed columns: $listed"
+    # Check if we're in regex mode
+    if ($ColumnFileType -eq "regex") {
+        $pattern = $columnList[0]
+        
+        if ($Exclude) {
+            # Exclude mode: keep columns that do NOT match the pattern
+            $validKeep = $allColumns | Where-Object { $_ -notmatch $pattern }
+            if (-not $validKeep -or $validKeep.Count -eq 0) {
+                throw "Exclude mode with regex: pattern matches all columns (nothing to keep). Pattern: $pattern"
+            }
+            Write-Verbose "Exclude mode (regex): keeping columns NOT matching pattern '$pattern'."
+        } else {
+            # Include mode: keep columns that match the pattern
+            $validKeep = $allColumns | Where-Object { $_ -match $pattern }
+            if (-not $validKeep -or $validKeep.Count -eq 0) {
+                $available = $allColumns -join ", "
+                throw "Include mode with regex: no columns match pattern '$pattern'. Available columns: $available"
+            }
+            Write-Verbose "Include mode (regex): keeping columns matching pattern '$pattern'."
         }
-        Write-Verbose "Exclude mode: keeping columns NOT listed in the column list."
     } else {
-        # Normal mode: keep columns that ARE listed in columnList
-        $validKeep = $columnList | Where-Object { $_ -in $allColumns }
-        if (-not $validKeep -or $validKeep.Count -eq 0) {
-            $available = $allColumns -join ", "
-            throw "None of the specified columns were found in input file '$InFile'. Available columns: $available"
+        # Name list mode (csv or ps1 or default)
+        if ($Exclude) {
+            # Exclude mode: keep columns that are NOT listed in columnList
+            $validKeep = $allColumns | Where-Object { $_ -notin $columnList }
+            if (-not $validKeep -or $validKeep.Count -eq 0) {
+                $listed = $columnList -join ", "
+                throw "Exclude mode is enabled, but all columns are listed in ColumnFile (nothing to keep). Listed columns: $listed"
+            }
+            Write-Verbose "Exclude mode: keeping columns NOT listed in the column list."
+        } else {
+            # Normal mode: keep columns that ARE listed in columnList
+            $validKeep = $columnList | Where-Object { $_ -in $allColumns }
+            if (-not $validKeep -or $validKeep.Count -eq 0) {
+                $available = $allColumns -join ", "
+                throw "None of the specified columns were found in input file '$InFile'. Available columns: $available"
+            }
+            Write-Verbose "Include mode: keeping only columns listed in the column list."
         }
-        Write-Verbose "Include mode: keeping only columns listed in the column list."
     }
 
     $data |
