@@ -7,9 +7,9 @@
   and writes the result to another CSV file.
 
   By default, the column list is treated as an include list:
-    - Only the columns listed in the column list are kept.
+    - Only the columns matching the column list are kept.
   When -Exclude is specified (exclude mode):
-    - All columns *except* those listed in the column list are kept.
+    - All columns *except* those matching the column list are kept.
 
   The column list can be provided in four ways:
 
@@ -24,8 +24,6 @@
   4. -ColumnFile <file-path> with file extension .txt:
      The file should contain a single regular expression pattern used to match column names, e.g.:
        ^(.*Name$|^CN$|^DisplayName$)$
-     In include mode (default), columns matching the pattern are kept.
-     In exclude mode (-Exclude), columns NOT matching the pattern are kept.
 
   NOTES:
   Input and output are processed via Import-Csv / Export-Csv.
@@ -54,7 +52,7 @@
 
 .PARAMETER Exclude
   (Alias -x) Negates the column selection. When specified, the column list
-  is treated as an exclude list, so columns NOT listed in the list will be kept.
+  is treated as an exclude list, so columns NOT matching the list will be kept.
 
 .EXAMPLE
   # Uses the built-in column list and keeps only those columns.
