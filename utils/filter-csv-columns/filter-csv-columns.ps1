@@ -32,11 +32,12 @@
   - Output is written with UTF-8 encoding and without type information.
   - For stable processing, the input file should also be encoded in UTF-8.
 
-  Sample column list files are provided under utils/filter-csv-columns:
+  Sample column list files are provided:
   - column_list.csv: Comma-separated list of AD group columns
   - column_list.ps1: PowerShell array of AD group columns
   - column_list.txt: Regular expression pattern (sample, may need adjustment for real usage)
-  These samples are aligned with Active Directory group data use-cases in this repository.
+  These samples are aligned with the import-ADData.ps1 script and pre-import preparation phase
+  explained in Docs/HOWTO_prepare_CSV_data.md in this repository.
 
 .PARAMETER InFile
   (Alias -i) Mandatory. Path to the input CSV file.
@@ -49,8 +50,7 @@
   - If it ends with .csv, it is treated as a comma-separated list of column names.
   - If it ends with .ps1, it must define a variable named $columnList.
   - If it ends with .txt, it should contain a single regular expression pattern
-    that will be matched against column names (include mode keeps matching columns,
-    exclude mode keeps non-matching columns).
+    that will be matched against column names.
 
 .PARAMETER Exclude
   (Alias -x) Negates the column selection. When specified, the column list
