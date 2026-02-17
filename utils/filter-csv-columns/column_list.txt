@@ -1,1 +1,1 @@
-^(.*Name$|^CN$|^SamAccountName$|^DisplayName$|^Group(Category|Scope)$|^groupType$)$
+^(.*Name|CN|Group(Category|Scope)|groupType)$
