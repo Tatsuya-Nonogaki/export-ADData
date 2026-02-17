@@ -101,7 +101,7 @@ function Get-ColumnList {
         # Default column-list when -ColumnFile is not specified:
         # Define as you need for quick one-shot operations,
         # or always specify -ColumnFile.
-        return @(
+        Write-Output -NoEnumerate @(
             "MemberOf",
             "CN",
             "Description",
@@ -118,6 +118,7 @@ function Get-ColumnList {
             "ObjectClass",
             "SamAccountName"
         )
+        return
     }
 
     if (-not (Test-Path $ColumnFilePath)) {
@@ -131,14 +132,14 @@ function Get-ColumnList {
             # Column list from comma-separated text file
             $text = Get-Content -Path $ColumnFilePath -Raw
             $cols = $text -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
-            return $cols
+            Write-Output -NoEnumerate $cols
         }
 
         ".ps1" {
             # Column list from PowerShell script defining $columnList
             . $ColumnFilePath
             if ($columnList) {
-                return $columnList
+                Write-Output -NoEnumerate $columnList
             } else {
                 throw "ColumnFile '$ColumnFilePath' does not define 'columnList'."
             }
@@ -152,7 +153,7 @@ function Get-ColumnList {
             if ([string]::IsNullOrWhiteSpace($pattern)) {
                 throw "ColumnFile '$ColumnFilePath' is empty or contains only whitespace."
             }
-            return @($pattern)
+            Write-Output -NoEnumerate @($pattern)
         }
 
         default {
