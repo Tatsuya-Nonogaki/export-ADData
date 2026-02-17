@@ -141,7 +141,7 @@ function Get-ColumnList {
             if ($columnList) {
                 Write-Output -NoEnumerate $columnList
             } else {
-                throw "ColumnFile '$ColumnFilePath' does not define 'columnList'."
+                throw "ColumnFile '$ColumnFilePath' does not define '`$columnList'."
             }
         }
 
