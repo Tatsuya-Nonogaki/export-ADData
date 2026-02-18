@@ -25,7 +25,7 @@
 
 2. インポートに不要なカラムを削除
 
-   インポートに使わない列を含んでいても `import-ADData.ps1` の動作に影響はありませんが、整理しておいたほうがこの後の編集やチェックがスムーズです。
+   インポートに使用されない列を含んでいても `import-ADData.ps1` の動作に影響はありませんが、整理しておいたほうがこの後の編集やチェックがスムーズです。
 
    **必要最小限のカラム**
    
@@ -45,16 +45,26 @@
 
      - ユーザーに次回ログオン時のパスワード変更を強制するかどうかを制御する`"ChangePasswordAtLogon"`列を追加することも可能です。値が`TRUE`/`YES`/`1`の場合は有効に、`FALSE`/`NO`/`0`の場合は無効になります。この列の存在は、`userAccountControl`に含まれるビットより優先されます。場合によっては`"Password"`列との併用が必要となります。詳しくはREADMEや`import-ADData.ps1`のヘルプを参照してください。
 
-   不要な列を削除するには、一旦 Excel に (例えば、Users_domain_local-nosys.xlsx と Groups_domain_local-nosys.xlsx として) 読み込ませて手動で削除してもいいですが、CSVのままスクリプトで一括処理する手があります。  
-   [utilsフォルダにある **filter-csv-columns.ps1**](../utils/filter-csv-columns/filter-csv-columns.ps1) が活用できます。  
-  
-   **使用例**  
-   先に、前述の最小カラム名一覧を `column_list-Groups.csv`, `column_list-Users.csv` (UTF-8, CRLF) でファイル化しておきます。そして、PowerShellコンソール上で下記それぞれを実行します:
-   ```powershell
-   .\filter-csv-columns.ps1 -InFile .\Groups_domain_local-nosys.csv -OutFile .\Groups_domain_local-slim.csv -ColumnFile .\column_list-Groups.csv
-   .\filter-csv-columns.ps1 -InFile .\Users_domain_local-nosys.csv -OutFile .\Users_domain_local-slim.csv -ColumnFile .\column_list-Users.csv
-   ```
-   これだけです! 念のため、出力ファイルをチェックしてくださいね。詳しくは [filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1) のヘルプヘッダを参照してください。
+   不要な列を削除するには、いくつか方法があります:  
+
+   - **手動で削除 (Excel)**  
+     一旦 Excel に (例えば、`Users_domain_local-nosys.xlsx` と `Groups_domain_local-nosys.xlsx`) 読み込ませて、不要な列を手動で削除。
+
+   - **スクリプトで一括削除 (filter-csv-columns.ps1)**  
+     補助スクリプト [utils/filter-csv-columns/filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1) を使えば、以下のようにして、自動で削除することができます:  
+
+     前述の「必要最小限のカラム」の文字列を (カンマも含めて) ファイルに保存します (UTF-8, CRLF):  
+       - `column_list-Groups.csv`
+       - `column_list-Users.csv`
+
+     そして、PowerShellコンソール上で下記それぞれを実行します:
+
+     ```powershell
+     .\filter-csv-columns.ps1 -InFile .\Groups_domain_local-nosys.csv -OutFile .\Groups_domain_local-slim.csv -ColumnFile .\column_list-Groups.csv
+     .\filter-csv-columns.ps1 -InFile .\Users_domain_local-nosys.csv -OutFile .\Users_domain_local-slim.csv -ColumnFile .\column_list-Users.csv
+     ```
+
+     これだけです! 念のため、出力ファイルをチェックしてくださいね。詳しくは [filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1) のヘルプやコメントを参照してください。
 
 3. **Users_domain_local-slim.xlsx（Groups_domain_local-slim.xlsx）**  
    不要な列を除去した後にこのファイル名で保存します。ただし `filter-csv-columns.ps1` で処理した場合は必要ありません。
