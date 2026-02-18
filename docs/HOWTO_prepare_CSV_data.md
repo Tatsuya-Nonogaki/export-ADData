@@ -4,7 +4,7 @@
 
 ## Preparation Phase
 
-- Export the source Groups and Users from AD to CSV using `export-ADData.ps1`. At this time, system users and groups are unnecessary, except for the most special cases, so be sure to use the `-ExcludeSystemObject` option.
+- Export the source Groups and Users from AD to CSV using `export-ADData.ps1`. At this time, system users and groups are unnecessary, except for the most special cases, so be sure to use the `-ExcludeSystemObject` (`-nosys`) option.
 
 - Similarly, export from the import target AD using `-ExcludeSystemObject`. Even if your intended import target is a branch OU, always specify the base domain in `-DNPath` during export.
 
@@ -23,30 +23,58 @@
 1. **Users_domain_local-nosys.csv (Groups_domain_local-nosys.csv)**  
    The original data exported from `export-ADData.ps1` with system objects excluded.
 
-2. **Users_domain_local-nosys.xlsx (Groups_domain_local-nosys.xlsx)**  
-   Convert to Excel for further operations. Identify and highlight columns unnecessary for import by utilizing conditional formatting, etc—these are not harmful for `import-ADData.ps1` but are cumbersome for editing.
+2. **Remove unnecessary columns for import**
 
-   - For Groups (save if you want as i.e., headers-slim-Groups.csv; for Excel processing, local encoding like ShiftJIS may be appropriate):  
-     **Minimal**  
-     `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
+   Although having extra columns in the CSV does not break `import-ADData.ps1`, removing columns that are not used for import will make later editing, checking, and troubleshooting much easier.
 
-     **Note:** Some columns e.g., DisplayName, HomePage, ObjectCategory, CN are not used in `import-ADData.ps1` for now. But we recommend to keep these for your reference or future utilization.
+     **Minimal column sets**
 
-   - For Users (i.e., headers-slim-Users.csv):  
-     **Minimal**  
-     `MemberOf,Manager,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
+     - For Groups:  
 
-     📝 **Note:** Some columns e.g., CanonicalName, CN, codePage, HomePage, Initials, Organization, PrimaryGroup, sAMAccountType are not used in `import-ADData.ps1` for now. But we recommend to keep these for your reference or future utilization.
+       `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
 
-     📝 **Note:** Add `"Password"` column if you need to register password for any user. (See site README or import-ADData.ps1 help.) Existence of this column does no harm because `import-ADData.ps1` ignores each Password field if it is blank.
+       📝 **Note:** Some columns such as `DisplayName`, `HomePage`, `ObjectCategory`, `CN` are not currently used by `import-ADData.ps1`. However, they can still be useful for reference during your work, or for future extensions.
 
-     📝 **Note:** You may also add a `"ChangePasswordAtLogon"` column to the user CSV to control whether users must change their password at next logon. Acceptable values are `TRUE`, `YES`, or `1` to enable, and `FALSE`, `NO`, or `0` to disable. This column takes precedence over the `userAccountControl` property for this setting. To activate this feature, you may have to use the `"Password"` column together with `"ChangePasswordAtLogon"`. For more details, see the README and `import-ADData.ps1` help.
+     - For Users:  
+
+       `MemberOf,Manager,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
+
+       📝 **Note:**
+       - Some columns such as `CanonicalName`, `CN`, `codePage`, `HomePage`, `Initials`, `Organization`, `PrimaryGroup`, `sAMAccountType` are not currently used by `import-ADData.ps1`. But it is recommended to keep them for reference or future utilization.
+
+       - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row’s `Password` field is empty, `import-ADData.ps1` simply ignores it.
+
+       - You may also add a `"ChangePasswordAtLogon"` column to control whether users must change their password at next logon. Acceptable values are `TRUE`, `YES`, or `1` to enable, and `FALSE`, `NO`, or `0` to disable. This column takes precedence over the `userAccountControl` property for this setting. To activate this feature, you may need to use the `"Password"` column together with `"ChangePasswordAtLogon"`. For more details, see the README and `import-ADData.ps1` help.
+
+   You can remove columns in either of the following ways:
+
+   - **Manual method (Excel)**  
+     Load the CSV into Excel (e.g., save as `Users_domain_local-nosys.xlsx` or `Groups_domain_local-nosys.xlsx`), then manually delete columns that you do not need for import.
+
+   - **Automatic method (filter-csv-columns.ps1)**  
+     You can use the helper script [utils/filter-csv-columns/filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1) to trim your CSVs automatically, as described below:  
+
+     Save the minimal column sets strings above (including commas) in files (UTF-8, CRLF):  
+       - `column_list-Groups.csv`
+       - `column_list-Users.csv`
+
+     Then run the following in a PowerShell console:
+
+     ```powershell
+     .\filter-csv-columns.ps1 -InFile .\Groups_domain_local-nosys.csv -OutFile .\Groups_domain_local-slim.csv -ColumnFile .\column_list-Groups.csv
+     .\filter-csv-columns.ps1 -InFile .\Users_domain_local-nosys.csv -OutFile .\Users_domain_local-slim.csv -ColumnFile .\column_list-Users.csv
+     ```
+
+     That’s all. Just review the output files briefly to confirm the columns look as expected.  
+     For more details, see the help and comments of [filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1).
 
 3. **Users_domain_local-slim.xlsx (Groups_domain_local-slim.xlsx)**  
-   Save this file after removing unnecessary columns.
+   Save this file after removing unnecessary columns.  
+   If you used `filter-csv-columns.ps1` in step 2 to generate `*-slim.csv`, you may skip this additional Excel step unless you need Excel specifically for manual editing or review.
 
 4. **Users_domain_local-slim.csv (Groups_domain_local-slim.csv)**  
-   Save the previous Excel file as CSV (UTF-8).
+   Save the previous Excel file as CSV (UTF-8).  
+   If you used `filter-csv-columns.ps1` in step 2, this `*-slim.csv` file has already been created, so no further conversion is required here.
 
 5. **Users_domain_local-slim-mod.csv (Groups_domain_local-slim-mod.csv)**  
    If you need to delete certain groups or users, create a regex file (e.g., `exclude-users-regex.txt`) containing patterns to match SamAccountName, Name, or CN for exclusion. (If you only have a few entries to remove, manual deletion is fine. However, this method will also save you when you need to re-export the original data later to start over.):  
