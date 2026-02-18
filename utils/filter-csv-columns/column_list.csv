@@ -1,1 +1,1 @@
-MemberOf,CN,Description,DisplayName,DistinguishedName,Name,ObjectClass,SamAccountName
+MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName

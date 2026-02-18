@@ -1,0 +1,1 @@
+^(.*Name|CN|Group(Category|Scope)|groupType)$

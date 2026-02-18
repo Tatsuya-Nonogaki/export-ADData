@@ -4,7 +4,14 @@ $columnList = @(
     "Description",
     "DisplayName",
     "DistinguishedName",
+    "GroupCategory",
+    "GroupScope",
+    "groupType",
+    "HomePage",
+    "isCriticalSystemObject",
+    "ManagedBy",
     "Name",
+    "ObjectCategory",
     "ObjectClass",
     "SamAccountName"
 )
