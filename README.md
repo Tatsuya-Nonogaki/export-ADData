@@ -7,7 +7,10 @@ export-ADData is a flexible PowerShell toolkit for exporting and importing Activ
 - **`export-ADData`**: Export Active Directory (AD) users, groups, and computers to CSV files with flexible options.
 - **`import-ADData`**: Import AD users, groups, and computers from CSV files, supporting migration, OU reorganization, cross-domain moves, flattening, and detailed mapping.
 - **`compare-ADCSV`**: Compare two AD export CSVs for verification.
-- **`check-ADUserPassword`**: Check AD user password validity.
+- **`check-ADUserPassword`**: Check AD user password validity.  
+
+Other Tools:
+- **`filter-csv-columns.ps1`**: A versatile utility to filter a CSV by column names and export it as a new CSV file.
 
 ### 📢 Stay Updated!
 **Want to know when this project is updated?**  
@@ -47,7 +50,15 @@ There are four major strategies for combining export and import:
 
 ---
 
-## Scripts Included
+## Scripts & Tools Included
+
+1. [export-ADData.ps1](#1-export-addataps1)
+2. [import-ADData.ps1](#2-import-addataps1)
+3. [compare-ADCSV.ps1](#3-compare-adcsvps1)
+4. [check-ADUserPassword.ps1](#4-check-aduserpasswordps1)
+5. [[Utils] filter-csv-columns.ps1](#5-filter-csv-columnsps1-utility)
+
+---
 
 ### 1. export-ADData.ps1
 
@@ -368,6 +379,38 @@ Checks whether a user's password is set as expected by querying AD.
 # Check if the user's password is correct
 .\check-ADUserPassword.ps1 -UserName "jdoe" -Password "password123"
 ```
+
+---
+
+### 5. filter-csv-columns.ps1 (Utility)
+
+#### Overview
+
+A versatile utility to filter a CSV file by column names and export it as a new CSV.
+
+#### Key Features
+
+- Reads a CSV file, filters its columns based on a given column name list and outputs as a new CSV file.
+- The list can be passed either as: a builtin variable, CSV file, a variable in a PS1 file or a REGEX string in a txt file. List definition samples of `.csv`, `.ps1`, and `.txt` are also provided.
+- Optionally, can invert the selection; keeps columns that do NOT match the list.
+
+#### Parameters
+
+| Parameter   | Alias | Required | Description                                                  |
+|-------------|-------|----------|--------------------------------------------------------------|
+| `-InFile`   | `-i`  | Yes      | Path to the input CSV file                                   |
+| `-OutFile`  | `-o`  | Yes      | Path to the output CSV file                                   |
+| `-ColumnFile` | `-c`  | No       | Path to a column list definition file; the list type is determined by its filename extention, either `.csv`, `ps1` or `txt`. A builtin variable is used if omitted  |
+| `-Exclude`  | `-x`  | No       | Inverts the column selection; the list is treated as an exclude list  |
+
+#### Usage Example
+
+```powershell
+# Reads column list from columns-ADUsers.csv (comma-separated) and outputs the matching columns out of data.csv into filtered.csv
+.\filter-csv-columns.ps1 -InFile data.csv -OutFile filtered.csv -ColumnFile columns-ADUsers.csv
+```
+
+See the help and comments of [`filter-csv-columns.ps1`](utils/filter-csv-columns/filter-csv-columns.ps1) in [`utils/` folder](utils/filter-csv-columns) for more detail.
 
 ---
 
