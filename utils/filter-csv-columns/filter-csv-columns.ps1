@@ -59,12 +59,12 @@
   .\filter-csv-columns.ps1 -InFile input.csv -OutFile output.csv
 
 .EXAMPLE
-  # Reads column names from columns.csv (comma-separated) and keeps only those columns.
-  .\filter-csv-columns.ps1 -i data.csv -o filtered.csv -c columns-ADUsers.csv
+  # Reads column names from column_list.csv (comma-separated) and keeps only those columns.
+  .\filter-csv-columns.ps1 -i data.csv -o filtered.csv -c column_list.csv
 
 .EXAMPLE
-  # Reads $columnList from columns.ps1 and keeps all columns *except* those in $columnList.
-  .\filter-csv-columns.ps1 -i data.csv -o filtered.csv -c columns-ADUsers.ps1 -Exclude
+  # Reads $columnList from column_list.ps1 and keeps all columns *except* those in $columnList.
+  .\filter-csv-columns.ps1 -i data.csv -o filtered.csv -c column_list.ps1 -Exclude
 #>
 
 [CmdletBinding()]
