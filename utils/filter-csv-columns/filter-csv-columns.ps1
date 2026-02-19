@@ -5,6 +5,7 @@
 .DESCRIPTION
   This script reads a CSV file, filters its columns based on a column list,
   and writes the result to another CSV file.
+  Version: 0.1.2
 
   By default, the column list is treated as an include list:
     - Only the columns matching the column list are kept.
@@ -28,7 +29,7 @@
   NOTES:
   Input and output are processed via Import-Csv / Export-Csv.
   - Output is written with UTF-8 encoding and without type information.
-  - For stable processing, the input file should also be encoded in UTF-8.
+  - For stable processing, both input and column-list file must be encoded in UTF-8 with CRLF.
 
   Sample column list files are provided:
   - column_list.csv: Comma-separated list of AD group columns
@@ -128,8 +129,19 @@ function Get-ColumnList {
     switch ($ext) {
         ".csv" {
             # Column list from comma-separated text file
-            $text = Get-Content -Path $ColumnFilePath -Raw
-            $cols = $text -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+            $text = Get-Content -Path $ColumnFilePath -Raw -Encoding UTF8
+
+            $cols =
+              $text -split "," |
+                ForEach-Object {
+                    $s = $_.Trim()
+                    if ($s -match '^"(.*)"$') {
+                        # Strip surrounding double quotes: "Name" -> Name
+                        $s = $Matches[1]
+                    }
+                    $s
+                } | Where-Object { $_ -ne "" }
+
             Write-Output -NoEnumerate $cols
         }
 
@@ -146,7 +158,7 @@ function Get-ColumnList {
         ".txt" {
             # Regular expression pattern from text file
             $script:ColumnFileType = "regex"
-            $pattern = Get-Content -Path $ColumnFilePath -Raw
+            $pattern = Get-Content -Path $ColumnFilePath -Raw -Encoding UTF8
             $pattern = $pattern.Trim()
             if ([string]::IsNullOrWhiteSpace($pattern)) {
                 throw "ColumnFile '$ColumnFilePath' is empty or contains only whitespace."
@@ -169,7 +181,7 @@ try {
         throw "No column names were obtained. Please check the ColumnFile."
     }
 
-    $data = Import-Csv -Path $InFile
+    $data = Import-Csv -Path $InFile -Encoding UTF8
 
     if (-not $data) {
         throw "Input file '$InFile' has no data."
