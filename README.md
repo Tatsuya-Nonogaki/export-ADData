@@ -394,6 +394,9 @@ A versatile utility to filter a CSV file by column names and export it as a new 
 - The list can be passed either as: a builtin variable, CSV file, a variable in a PS1 file or a REGEX string in a txt file. List definition samples of `.csv`, `.ps1`, and `.txt` are also provided.
 - Optionally, can invert the selection; keeps columns that do NOT match the list.
 
+> 📝 **Note:**  
+> Both input and column-list files must be encoded in UTF-8 with CRLF line breaks for stable processing.
+
 #### Parameters
 
 | Parameter   | Alias | Required | Description                                                  |
