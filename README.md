@@ -395,16 +395,17 @@ A versatile utility to filter a CSV file by column names and export it as a new 
 - Optionally, can invert the selection; keeps columns that do NOT match the list.
 
 > 📝 **Note:**  
-> Both input and column-list files must be encoded in UTF-8 with CRLF line breaks for stable processing.
+> * Both the input CSV and the column-list files must be encoded in UTF-8 with CRLF line breaks for stable processing.
+> * As an alternative, the Excel macro [DeleteExtraColumns.bas](utils/filter-csv-columns/DeleteExtraColumns.bas) is also provided in the [same folder](utils/filter-csv-columns). If you import this macro into a workbook and run it on a worksheet, the **data on that sheet is modified in place**. Make sure to work on a copy of your workbook.
 
 #### Parameters
 
-| Parameter   | Alias | Required | Description                                                  |
-|-------------|-------|----------|--------------------------------------------------------------|
-| `-InFile`   | `-i`  | Yes      | Path to the input CSV file                                   |
-| `-OutFile`  | `-o`  | Yes      | Path to the output CSV file                                   |
-| `-ColumnFile` | `-c`  | No       | Path to a column list definition file; the list type is determined by its filename extention, either `.csv`, `ps1` or `txt`. A builtin variable is used if omitted  |
-| `-Exclude`  | `-x`  | No       | Inverts the column selection; the list is treated as an exclude list  |
+| Parameter     | Alias | Required | Description                                                                                                                                      |
+|---------------|-------|----------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `-InFile`     | `-i`  | Yes      | Path to the input CSV file                                                                                                                       |
+| `-OutFile`    | `-o`  | Yes      | Path to the output CSV file                                                                                                                      |
+| `-ColumnFile` | `-c`  | No       | Path to a column list definition file; the list type is determined by its filename extension, either `.csv`, `.ps1` or `.txt`. A built-in list is used if omitted. |
+| `-Exclude`    | `-x`  | No       | Inverts the column selection; the list is treated as an exclude list                                                                            |
 
 #### Usage Example
 
