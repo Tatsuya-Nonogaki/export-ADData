@@ -1,4 +1,19 @@
+' DeleteExtraColumns.bas
+'
+' This macro creates a new worksheet that contains only the columns
+' whose headers are listed in the "ColumnList" sheet. The original
+' worksheet is not modified, but a new worksheet is added to the workbook.
+' It is recommended to work on a copy of your workbook or keep a backup
+' before applying this macro.
+'
+' Usage:
+'   - Put the list of column headers to keep in the "ColumnList" sheet (range A1:A100 by default).
+'   - Activate the source worksheet that contains the data to be filtered.
+'   - Run DeleteExtraColumns. A new worksheet (e.g. "Sheet1_Filtered") will be created,
+'     and columns not listed in "ColumnList" will be removed from that new sheet.
+'
 Sub DeleteExtraColumns()
+    Dim wsSource As Worksheet
     Dim wsData As Worksheet
     Dim wsList As Worksheet
     Dim rngList As Range
@@ -10,11 +25,12 @@ Sub DeleteExtraColumns()
     Dim j As Long
     Dim headerNorm As String
     Dim keepNorm As String
+    Dim newName As String
 
     ' === Settings =========================================
-    Set wsData = ActiveSheet                      ' Target worksheet (change if needed)
-    Set wsList = ThisWorkbook.Worksheets("ColumnList") ' Worksheet that holds the column list
-    Set rngList = wsList.Range("A1:A100")         ' Cell range that contains header names to keep
+    Set wsSource = ActiveSheet                           ' Source worksheet (will NOT be modified)
+    Set wsList = ThisWorkbook.Worksheets("ColumnList")   ' Worksheet that holds the column list
+    Set rngList = wsList.Range("A1:A100")                ' Cell range that contains header names to keep
     ' ======================================================
 
     ' Load header names from the specified range into an array (skip empty cells)
@@ -26,7 +42,17 @@ Sub DeleteExtraColumns()
 
     Application.ScreenUpdating = False
 
-    ' Get the last used column in row 1
+    ' Work on a copied worksheet so the original remains intact
+    wsSource.Copy After:=wsSource
+    Set wsData = wsSource.Next
+
+    ' Try to give the copied sheet a descriptive name
+    newName = wsSource.Name & "_Filtered"
+    On Error Resume Next
+    wsData.Name = newName
+    On Error GoTo 0
+
+    ' Get the last used column in row 1 on the copied sheet
     lastCol = wsData.Cells(1, wsData.Columns.Count).End(xlToLeft).Column
 
     ' Loop from right to left to avoid index shift issues when deleting columns
@@ -52,7 +78,7 @@ Sub DeleteExtraColumns()
     Next i
 
     Application.ScreenUpdating = True
-    MsgBox "Column cleanup completed.", vbInformation
+    MsgBox "Column cleanup completed on the copied worksheet.", vbInformation
 End Sub
 
 ' Helper: convert a range to a 1D array, skipping empty cells
