@@ -396,7 +396,8 @@ A versatile utility to filter a CSV file by column names and export it as a new 
 
 > 📝 **Note:**  
 > * Both the input CSV and the column-list files must be encoded in UTF-8 with CRLF line breaks for stable processing.
-> * As an alternative, the Excel macro [DeleteExtraColumns.bas](utils/filter-csv-columns/DeleteExtraColumns.bas) is also provided in the [same folder](utils/filter-csv-columns). If you import this macro into a workbook and run it on a worksheet, the **data on that sheet is modified in place**. Make sure to work on a copy of your workbook.
+> * As an alternative, the Excel macro [DeleteExtraColumns.bas](utils/filter-csv-columns/DeleteExtraColumns.bas) is also provided in the [same folder](utils/filter-csv-columns).  
+>   If you import this macro into a workbook and run it on a worksheet, a **new worksheet containing only the selected columns** will be created. The original worksheet is not modified, but a new worksheet is added to the workbook. It is recommended to work on a copy of your workbook or keep a backup before applying the macro.
 
 #### Parameters
 
