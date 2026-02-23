@@ -49,7 +49,22 @@ Sub DeleteExtraColumns()
     Application.ScreenUpdating = False
 
     ' Work on a copied worksheet so the original remains intact
+    On Error Resume Next
     wsSource.Copy After:=wsSource
+    If Err.Number <> 0 Then
+        Dim copyErrMsg As String
+        copyErrMsg = "Failed to copy the source worksheet." & vbCrLf & _
+                     "Please check if sheet copying is allowed for this workbook." & vbCrLf & _
+                     "Error " & Err.Number & ": " & Err.Description
+        MsgBox copyErrMsg, vbExclamation
+
+        Err.Clear
+        Application.ScreenUpdating = True
+        On Error GoTo 0
+        Exit Sub
+    End If
+    On Error GoTo 0
+
     Set wsData = wsSource.Next
 
     ' Try to give the copied sheet a descriptive name
