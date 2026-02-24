@@ -1,16 +1,21 @@
 ' DeleteExtraColumns.bas
 '
 ' This macro creates a new worksheet that contains only the columns
-' whose headers are listed in the "ColumnList" sheet. The original
-' worksheet is not modified, but a new worksheet is added to the workbook.
+' whose headers are listed in a configurable "ColumnList" range.
+' The original worksheet is not modified, but a new worksheet is added to the workbook.
 ' It is recommended to work on a copy of your workbook or keep a backup
 ' before applying this macro.
 '
 ' Usage:
-'   - Put the list of column headers to keep in the "ColumnList" sheet (range A1:A100 by default).
-'   - Activate the source worksheet that contains the data to be filtered.
-'   - Run DeleteExtraColumns. A new worksheet (e.g. "Sheet1_Filtered") will be created,
-'     and columns not listed in "ColumnList" will be removed from that new sheet.
+'   1) Prepare a list of column headers to keep (one header per cell).
+'      - Recommended: on the worksheet named "ColumnList", create a named range "ColumnList"
+'        that covers your header list (workbook- or sheet-scoped; any size such as A1:A20, A1:A300, etc.).
+'      - Alternative: you may also define a named range "ColumnList" on any worksheet;
+'        in that case, it must be workbook-scoped.
+'      - Fallback: if no named range is found, the macro uses the fixed range "ColumnList"!A1:A100.
+'   2) Activate the source worksheet that contains the data to be filtered.
+'   3) Run DeleteExtraColumns. A new worksheet (e.g. "Sheet1_Filtered") will be created,
+'      and columns not listed in the column list will be removed from that new sheet.
 '
 Sub DeleteExtraColumns()
     Dim wsSource As Worksheet
@@ -29,11 +34,21 @@ Sub DeleteExtraColumns()
 
     ' === Settings =========================================
     Set wsSource = ActiveSheet                           ' Source worksheet (will NOT be modified)
-    Set wsList = ThisWorkbook.Worksheets("ColumnList")   ' Worksheet that holds the column list
-    Set rngList = wsList.Range("A1:A100")                ' Cell range that contains header names to keep
+
+    On Error Resume Next
+    Set wsList = ThisWorkbook.Worksheets("ColumnList")   ' Worksheet that holds the column list (fallback)
+    On Error GoTo 0
+
+    ' Resolve the column list range (workbook- or worksheet-scoped named range, or the fixed range).
+    ' Function arguments: workbook, default worksheet, range name, default cell range.
+    Set rngList = ResolveColumnListRange(ThisWorkbook, wsList, "ColumnList", "A1:A100")
     ' ======================================================
 
-    ' Load header names from the specified range into an array (skip empty cells)
+    If rngList Is Nothing Then
+        MsgBox "No valid column list range was found on the workbook.", vbExclamation
+        Exit Sub
+    End If
+
     keepHeaders = RangeToArrayNonEmpty(rngList)
     If IsEmpty(keepHeaders) Then
         MsgBox "No valid values were found in the column list range.", vbExclamation
@@ -43,7 +58,22 @@ Sub DeleteExtraColumns()
     Application.ScreenUpdating = False
 
     ' Work on a copied worksheet so the original remains intact
+    On Error Resume Next
     wsSource.Copy After:=wsSource
+    If Err.Number <> 0 Then
+        Dim copyErrMsg As String
+        copyErrMsg = "Failed to copy the source worksheet." & vbCrLf & _
+                     "Please check if sheet copying is allowed for this workbook." & vbCrLf & _
+                     "Error " & Err.Number & ": " & Err.Description
+        MsgBox copyErrMsg, vbExclamation
+
+        Err.Clear
+        Application.ScreenUpdating = True
+        On Error GoTo 0
+        Exit Sub
+    End If
+    On Error GoTo 0
+
     Set wsData = wsSource.Next
 
     ' Try to give the copied sheet a descriptive name
@@ -80,6 +110,47 @@ Sub DeleteExtraColumns()
     Application.ScreenUpdating = True
     MsgBox "Column cleanup completed on the copied worksheet.", vbInformation
 End Sub
+
+' Resolve the column list range using a named range if available.
+' Priority:
+'   1) Workbook-scoped named range (ThisWorkbook.Names)
+'   2) Worksheet-scoped named range (wsFallback.Names)
+'   3) Fallback to wsFallback.Range(fallbackAddress)
+Private Function ResolveColumnListRange(wb As Workbook, wsFallback As Worksheet, _
+                                       ByVal namedRange As String, ByVal fallbackAddress As String) As Range
+    Dim nm As Name
+
+    ' 1) Workbook-scoped name
+    On Error Resume Next
+    Set nm = wb.Names(namedRange)
+    On Error GoTo 0
+    If Not nm Is Nothing Then
+        Set ResolveColumnListRange = nm.RefersToRange
+        Exit Function
+    End If
+
+    If Not wsFallback Is Nothing Then
+        ' 2) Worksheet-scoped name (e.g. ColumnList sheet local name)
+        On Error Resume Next
+        Set nm = wsFallback.Names(namedRange)
+        On Error GoTo 0
+        If Not nm Is Nothing Then
+            Set ResolveColumnListRange = nm.RefersToRange
+            Exit Function
+        End If
+
+        ' 3) Fallback address
+        On Error Resume Next
+        Set ResolveColumnListRange = wsFallback.Range(fallbackAddress)
+        On Error GoTo 0
+        If Not ResolveColumnListRange Is Nothing Then
+            Exit Function
+        End If
+    End If
+
+    ' Final trap: nothing resolved
+    Set ResolveColumnListRange = Nothing
+End Function
 
 ' Helper: convert a range to a 1D array, skipping empty cells
 Private Function RangeToArrayNonEmpty(rng As Range) As Variant
