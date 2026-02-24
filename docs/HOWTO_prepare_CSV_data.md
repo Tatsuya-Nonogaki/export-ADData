@@ -68,6 +68,11 @@
      That’s all. Just review the output files briefly to confirm the columns look as expected.  
      For more details, see the help and comments of [filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1).
 
+   - **Bulk column removal with an Excel macro (DeleteExtraColumns.bas)**  
+     The macro [utils/filter-csv-columns/DeleteExtraColumns.bas](../utils/filter-csv-columns/DeleteExtraColumns.bas) can be imported into an Excel workbook and run to create an additional worksheet where unnecessary columns have been removed.  
+     The original worksheet will NOT be modified, but as a precaution it is recommended to run the macro on a copy of your workbook or keep a backup before applying it.  
+     For detailed usage instructions, see the comments inside `DeleteExtraColumns.bas`.
+
 3. **Users_domain_local-slim.xlsx (Groups_domain_local-slim.xlsx)**  
    Save this file after removing unnecessary columns.  
    If you used `filter-csv-columns.ps1` in step 2 to generate `*-slim.csv`, you may skip this additional Excel step unless you need Excel specifically for manual editing or review.

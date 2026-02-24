@@ -66,6 +66,11 @@
 
      これだけです! 念のため、出力ファイルをチェックしてくださいね。詳しくは [filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1) のヘルプやコメントを参照してください。
 
+   - **Excelマクロで一括削除 (DeleteExtraColumns.bas)**  
+     [utils/filter-csv-columns/DeleteExtraColumns.bas](../utils/filter-csv-columns/DeleteExtraColumns.bas) は、Excelブックにインポートして実行することで、不要な列の除かれたデータを追加のワークシートとして生成することができるマクロです。  
+     もとのワークシートは改変されませんが、念のため、複製したワークブック上で実行するか、バックアップを採ってから適用することをお勧めします。  
+     詳しい使い方は `DeleteExtraColumns.bas` 内のコメントを参照してください。
+
 3. **Users_domain_local-slim.xlsx（Groups_domain_local-slim.xlsx）**  
    不要な列を除去した後にこのファイル名で保存します。ただし `filter-csv-columns.ps1` で処理した場合は必要ありません。
 
