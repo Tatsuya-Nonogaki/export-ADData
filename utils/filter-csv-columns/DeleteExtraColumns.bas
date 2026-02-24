@@ -34,11 +34,20 @@ Sub DeleteExtraColumns()
 
     ' === Settings =========================================
     Set wsSource = ActiveSheet                           ' Source worksheet (will NOT be modified)
+
+    On Error Resume Next
     Set wsList = ThisWorkbook.Worksheets("ColumnList")   ' Worksheet that holds the column list (fallback)
+    On Error GoTo 0
+
     ' Resolve the column list range (workbook- or worksheet-scoped named range, or the fixed range).
     ' Function arguments: workbook, default worksheet, range name, default cell range.
     Set rngList = ResolveColumnListRange(ThisWorkbook, wsList, "ColumnList", "A1:A100")
     ' ======================================================
+
+    If rngList Is Nothing Then
+        MsgBox "No valid column list range was found on the workbook.", vbExclamation
+        Exit Sub
+    End If
 
     keepHeaders = RangeToArrayNonEmpty(rngList)
     If IsEmpty(keepHeaders) Then
@@ -120,17 +129,27 @@ Private Function ResolveColumnListRange(wb As Workbook, wsFallback As Worksheet,
         Exit Function
     End If
 
-    ' 2) Worksheet-scoped name (e.g. ColumnList sheet local name)
-    On Error Resume Next
-    Set nm = wsFallback.Names(namedRange)
-    On Error GoTo 0
-    If Not nm Is Nothing Then
-        Set ResolveColumnListRange = nm.RefersToRange
-        Exit Function
+    If Not wsFallback Is Nothing Then
+        ' 2) Worksheet-scoped name (e.g. ColumnList sheet local name)
+        On Error Resume Next
+        Set nm = wsFallback.Names(namedRange)
+        On Error GoTo 0
+        If Not nm Is Nothing Then
+            Set ResolveColumnListRange = nm.RefersToRange
+            Exit Function
+        End If
+
+        ' 3) Fallback address
+        On Error Resume Next
+        Set ResolveColumnListRange = wsFallback.Range(fallbackAddress)
+        On Error GoTo 0
+        If Not ResolveColumnListRange Is Nothing Then
+            Exit Function
+        End If
     End If
 
-    ' 3) Fallback address
-    Set ResolveColumnListRange = wsFallback.Range(fallbackAddress)
+    ' Final trap: nothing resolved
+    Set ResolveColumnListRange = Nothing
 End Function
 
 ' Helper: convert a range to a 1D array, skipping empty cells
