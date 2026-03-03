@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.2
+  Version: 1.0.3beta
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -373,6 +373,15 @@ begin {
           # Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
         }
     }
+
+    # Critical system accounts to exclude when -IncludeSystemObject is not set.
+    # Note also $excludedGroups are not applied OU translation during "MemberOf" assignment.
+    $excludedUsers = @("SUPPORT_388945a0", "TsInternetUser")
+    $excludedGroups = @("DnsAdmins", "DnsUpdateProxy", "HelpServicesGroup", "TelnetClients", "WINS Users",
+                        "Administrators", "Domain Admins", "Enterprise Admins", "Schema Admins",
+                        "Account Operators", "Server Operators", "Backup Operators", "Print Operators",
+                        "Replicator", "Cert Publishers")
+    $excludedComputers = @() # Extend if you want to exclude specific accounts
 }
 
 process {
@@ -686,8 +695,6 @@ Review your CSV. To override this check, use -NoClassCheck.)
         )
 
         if ($objectClass -eq "user") {
-            $excludedUsers = @("SUPPORT_388945a0", "TsInternetUser")
-
             $users = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
@@ -943,11 +950,6 @@ Review your CSV. To override this check, use -NoClassCheck.)
             }
 
         } elseif ($objectClass -eq "group") {
-            $excludedGroups = @("DnsAdmins", "DnsUpdateProxy", "HelpServicesGroup", "TelnetClients", "WINS Users",
-                                "Administrators", "Domain Admins", "Enterprise Admins", "Schema Admins",
-                                "Account Operators", "Server Operators", "Backup Operators", "Print Operators",
-                                "Replicator", "Cert Publishers")
-
             # Import and sort groups by the total character length of MemberOf property
             $groups = Import-Csv -Path $filePath | 
                       Where-Object {
@@ -1086,8 +1088,6 @@ Review your CSV. To override this check, use -NoClassCheck.)
             }
 
         } elseif ($objectClass -eq "computer") {
-            $excludedComputers = @() # Extend if you want to exclude specific accounts
-
             $computers = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
