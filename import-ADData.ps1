@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.3beta
+  Version: 1.0.3
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -397,7 +397,8 @@ begin {
         "Server Operators",
         "Backup Operators",
         "Print Operators",
-        "Replicator"
+        "Replicator",
+        "Remote Desktop Users"
     )
 
     # System groups that may exist under an OU as well (location is not strictly fixed)
@@ -1023,6 +1024,11 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                     # Add this user to groups
                     $memberOfGroups = $usr.MemberOf -split ';'
+                    $memberOfGroups = $memberOfGroups | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+
+                    # Ignore "Domain Users" from MemberOf list because the user joins it automatically (primary group)
+                    $memberOfGroups = $memberOfGroups | Where-Object { $_ -notmatch '(?i)^CN=Domain Users,' }
+
                     foreach ($mgrp in $memberOfGroups) {
                         if ($mgrp -ne "") {
                             $newDN = ""
