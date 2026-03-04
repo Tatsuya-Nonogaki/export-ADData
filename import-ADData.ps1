@@ -712,6 +712,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
         }
     }
 
+    # Resolve a group DN on the destination AD from a sAMAccountName by a Get-ADGroup query.
+    # It uses an in-memory cache to avoid repeated lookups, including negative results.
     function Get-DNBySam {
         param(
             [string]$SamAccountName
@@ -737,6 +739,9 @@ Review your CSV. To override this check, use -NoClassCheck.)
         return $dn
     }
 
+    # Convert an original MemberOf group DN into the destination DN:
+    # - if it is a known system group, resolve it directly on the destination AD via Get-DNBySam function
+    # - otherwise translate the DN/OU path normally with Get-NewDN.
     function Get-NewMemberOfDN {
         param(
             [string]$OriginalGroupDN,
