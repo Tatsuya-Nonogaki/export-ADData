@@ -920,7 +920,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     if ($usr.PSObject.Properties.Name -contains "Password" -and $usr.Password -ne "") {
                         try {
                             $securePassword = ConvertTo-SecureString -String $usr.Password -AsPlainText -Force
-                            Set-ADAccountPassword -Identity $sAMAccountName -NewPassword $securePassword -Reset
+                            Set-ADAccountPassword -Identity $createdUser.DistinguishedName -NewPassword $securePassword -Reset
                             $IsPasswordSet = $true
                             Write-Host "  => Password set for user: $sAMAccountName"
                             Write-Log "Password set for user: sAMAccountName=$sAMAccountName"
