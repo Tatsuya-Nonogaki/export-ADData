@@ -1031,7 +1031,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     $memberOfGroups = $usr.MemberOf -split ';'
                     $memberOfGroups = $memberOfGroups | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
 
-                    # Ignore "Domain Users" from MemberOf list because the user joins it automatically (primary group)
+                    # Ignore "Domain Users" from MemberOf list because the user joins it automatically as primary group
                     $memberOfGroups = $memberOfGroups | Where-Object { $_ -notmatch '(?i)^CN=Domain Users,' }
 
                     foreach ($mgrp in $memberOfGroups) {
