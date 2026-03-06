@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.2
+  Version: 1.0.3
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -373,6 +373,49 @@ begin {
           # Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
         }
     }
+
+    # Critical system accounts baseline (tunable point for programmers).
+    # These arrays are used to:
+    # - exclude objects from import (unless -IncludeSystemObject is specified)
+    #   (Copied into $excluded* in Import-ADObject(), where you can extend the lists with
+    #   environment-specific entries if needed)
+    # - resolve MemberOf for system groups without OU translation (by DN lookup on destination AD)
+
+    $systemUsers = @(
+        "SUPPORT_388945a0",
+        "TsInternetUser"
+    )
+
+    # Groups that are strongly expected to live directly under CN=Builtin or CN=Users
+    # (location is effectively fixed)
+    $systemGroupsStrong = @(
+        "Administrators",
+        "Domain Admins",
+        "Enterprise Admins",
+        "Schema Admins",
+        "Account Operators",
+        "Server Operators",
+        "Backup Operators",
+        "Print Operators",
+        "Replicator",
+        "Remote Desktop Users"
+    )
+
+    # System groups that may exist under an OU as well (location is not strictly fixed)
+    $systemGroupsWeak = @(
+        "DnsAdmins",
+        "DnsUpdateProxy",
+        "HelpServicesGroup",
+        "TelnetClients",
+        "WINS Users",
+        "Cert Publishers"
+    )
+
+    # System computer accounts to exclude (usually leave empty; extend only when needed)
+    $systemComputers = @()
+
+    # Cache for Group DN lookup by sAMAccountName (key: sam, value: DistinguishedName or "")
+    $groupDnBySamCache = @{}
 }
 
 process {
@@ -669,6 +712,60 @@ Review your CSV. To override this check, use -NoClassCheck.)
         }
     }
 
+    # Resolve a group DN on the destination AD from a sAMAccountName by a Get-ADGroup query.
+    # It uses an in-memory cache to avoid repeated lookups, including negative results.
+    function Get-DNBySam {
+        param(
+            [string]$SamAccountName
+        )
+
+        if (-not $SamAccountName -or $SamAccountName.Trim() -eq "") { return "" }
+
+        $sam = $SamAccountName.Trim()
+
+        if ($script:groupDnBySamCache.ContainsKey($sam)) {
+            return $script:groupDnBySamCache[$sam]
+        }
+
+        $grp = Get-ADGroup -Identity $sam -Properties DistinguishedName -ErrorAction SilentlyContinue
+
+        $dn = ""
+        if ($grp -and $grp.DistinguishedName) {
+            $dn = $grp.DistinguishedName
+        }
+
+        # Update cache to avoid repeated lookups (including negative cache "" too)
+        $script:groupDnBySamCache[$sam] = $dn
+        return $dn
+    }
+
+    # Convert an original MemberOf group DN into the destination DN:
+    # - if it is a known system group, resolve it directly on the destination AD via Get-DNBySam function
+    # - otherwise translate the DN/OU path normally with Get-NewDN.
+    function Get-NewMemberOfDN {
+        param(
+            [string]$OriginalGroupDN,
+            [string]$DNPath,
+            [string[]]$SystemGroupSams
+        )
+
+        if (-not $OriginalGroupDN -or $OriginalGroupDN.Trim() -eq "") { return "" }
+
+        # Extract CN=xxx from MemberOf DN; in this script policy, treat it as sAMAccountName.
+        $sam = ""
+        if ($OriginalGroupDN -match '^\s*CN=([^,]+)') {
+            $sam = $matches[1]
+        }
+
+        # If system group: resolve on destination AD by sAMAccountName (no OU translation)
+        if ($sam -and $SystemGroupSams -and ($sam -in $SystemGroupSams)) {
+            return (Get-DNBySam -SamAccountName $sam)
+        }
+
+        # Otherwise: normal OU/DN translation
+        return (Get-NewDN -originalDN $OriginalGroupDN -DNPath $DNPath)
+    }
+
     # Normalize CSV value positive/negative to $null, $true, or $false
     function To-Bool($val) {
         if ($null -eq $val) { return $null }
@@ -685,9 +782,20 @@ Review your CSV. To override this check, use -NoClassCheck.)
             [string]$objectClass
         )
 
-        if ($objectClass -eq "user") {
-            $excludedUsers = @("SUPPORT_388945a0", "TsInternetUser")
+        # System groups list used for MemberOf resolution (Strong+Weak)
+        $systemGroupSams = @(@($systemGroupsStrong) + @($systemGroupsWeak))
 
+        # Build excluded lists from baseline (copy for local editability)
+        $excludedUsers     = @($systemUsers)
+        $excludedGroups    = @($systemGroupSams)
+        $excludedComputers = @($systemComputers)
+
+        # You can additionally exclude specific accounts by extending the arrays like below:
+        #   $excludedUsers     += @("SpecialAdmin", "BusManager")
+        #   $excludedGroups    += @("SpecialGroup1", "SpecialGroup2")
+        #   $excludedComputers += @("SPECIALPC01$", "SPECIALPC02$")
+
+        if ($objectClass -eq "user") {
             $users = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
@@ -818,7 +926,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     if ($usr.PSObject.Properties.Name -contains "Password" -and $usr.Password -ne "") {
                         try {
                             $securePassword = ConvertTo-SecureString -String $usr.Password -AsPlainText -Force
-                            Set-ADAccountPassword -Identity $sAMAccountName -NewPassword $securePassword -Reset
+                            Set-ADAccountPassword -Identity $createdUser.DistinguishedName -NewPassword $securePassword -Reset
                             $IsPasswordSet = $true
                             Write-Host "  => Password set for user: $sAMAccountName"
                             Write-Log "Password set for user: sAMAccountName=$sAMAccountName"
@@ -921,17 +1029,28 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                     # Add this user to groups
                     $memberOfGroups = $usr.MemberOf -split ';'
+                    $memberOfGroups = $memberOfGroups | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+
+                    # Ignore "Domain Users" from MemberOf list because the user joins it automatically as primary group
+                    $memberOfGroups = $memberOfGroups | Where-Object { $_ -notmatch '(?i)^CN=Domain Users,' }
+
                     foreach ($mgrp in $memberOfGroups) {
                         if ($mgrp -ne "") {
+                            $newDN = ""
                             try {
-                                $newDN = Get-NewDN -originalDN $mgrp -DNPath $DNPath
+                                $newDN = Get-NewMemberOfDN -OriginalGroupDN $mgrp -DNPath $DNPath -SystemGroupSams $systemGroupSams
+                                if (-not $newDN -or $newDN.Trim() -eq "") {
+                                    Write-Host "Warning: Target group not found on destination AD; skipped MemberOf entry: $mgrp" -ForegroundColor Yellow
+                                    Write-Log  "Warning: Target group not found on destination AD; skipped MemberOf entry: $mgrp (user=$sAMAccountName)"
+                                    continue
+                                }
 
                                 Add-ADGroupMember -Identity $newDN -Members $($createdUser.DistinguishedName)
                                 Write-Host "Added user $sAMAccountName to group: $newDN"
-                                Write-Log "User: sAMAccountName=$sAMAccountName added to group: $newDN"
+                                Write-Log  "User: sAMAccountName=$sAMAccountName added to group: $newDN"
                             } catch {
                                 Write-Host "Failed to add user $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
-                                Write-Log "Failed to add user sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                                Write-Log  "Failed to add user sAMAccountName=$sAMAccountName to group: $newDN - $_"
                             }
                         }
                     }
@@ -943,11 +1062,6 @@ Review your CSV. To override this check, use -NoClassCheck.)
             }
 
         } elseif ($objectClass -eq "group") {
-            $excludedGroups = @("DnsAdmins", "DnsUpdateProxy", "HelpServicesGroup", "TelnetClients", "WINS Users",
-                                "Administrators", "Domain Admins", "Enterprise Admins", "Schema Admins",
-                                "Account Operators", "Server Operators", "Backup Operators", "Print Operators",
-                                "Replicator", "Cert Publishers")
-
             # Import and sort groups by the total character length of MemberOf property
             $groups = Import-Csv -Path $filePath | 
                       Where-Object {
@@ -1067,27 +1181,32 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     $memberOfGroups = $grp.MemberOf -split ';'
                     foreach ($parentGroup in $memberOfGroups) {
                         if ($parentGroup -ne "") {
+                            $newDN = ""
                             try {
-                                $newDN = Get-NewDN -originalDN $parentGroup -DNPath $DNPath
+                                $newDN = Get-NewMemberOfDN -OriginalGroupDN $parentGroup -DNPath $DNPath -SystemGroupSams $systemGroupSams
+                                if (-not $newDN -or $newDN.Trim() -eq "") {
+                                    Write-Host "Warning: Target group not found on destination AD; skipped MemberOf entry: $parentGroup" -ForegroundColor Yellow
+                                    Write-Log  "Warning: Target group not found on destination AD; skipped MemberOf entry: $parentGroup (group=$sAMAccountName)"
+                                    continue
+                                }
 
                                 Add-ADGroupMember -Identity $newDN -Members $($createdGroup.DistinguishedName)
                                 Write-Host "Added group $sAMAccountName to parent group: $newDN"
-                                Write-Log "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
+                                Write-Log  "Group: sAMAccountName=$sAMAccountName added to group: $newDN"
                             } catch {
                                 Write-Host "Failed to add group $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
-                                Write-Log "Failed to add group sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                                Write-Log  "Failed to add group sAMAccountName=$sAMAccountName to group: $newDN - $_"
                             }
                         }
                     }
-                } else {
+                }
+                else {
                     Write-Host "Group $sAMAccountName already exists; skipping import"
                     Write-Log "Group Skipped (Already Exists): sAMAccountName=$sAMAccountName"
                 }
             }
 
         } elseif ($objectClass -eq "computer") {
-            $excludedComputers = @() # Extend if you want to exclude specific accounts
-
             $computers = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
@@ -1195,15 +1314,21 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     $memberOfGroups = $comp.MemberOf -split ';'
                     foreach ($mgrp in $memberOfGroups) {
                         if ($mgrp -ne "") {
+                            $newDN = ""
                             try {
-                                $newDN = Get-NewDN -originalDN $mgrp -DNPath $DNPath
+                                $newDN = Get-NewMemberOfDN -OriginalGroupDN $mgrp -DNPath $DNPath -SystemGroupSams $systemGroupSams
+                                if (-not $newDN -or $newDN.Trim() -eq "") {
+                                    Write-Host "Warning: Target group not found on destination AD; skipped MemberOf entry: $mgrp" -ForegroundColor Yellow
+                                    Write-Log  "Warning: Target group not found on destination AD; skipped MemberOf entry: $mgrp (computer=$sAMAccountName)"
+                                    continue
+                                }
 
                                 Add-ADGroupMember -Identity $newDN -Members $($createdComputer.DistinguishedName)
                                 Write-Host "Added computer $sAMAccountName to group: $newDN"
-                                Write-Log "Computer: sAMAccountName=$sAMAccountName added to group: $newDN"
+                                Write-Log  "Computer: sAMAccountName=$sAMAccountName added to group: $newDN"
                             } catch {
                                 Write-Host "Failed to add computer $sAMAccountName to group $newDN. Error: $_" -ForegroundColor Red
-                                Write-Log "Failed to add computer sAMAccountName=$sAMAccountName to group: $newDN - $_"
+                                Write-Log  "Failed to add computer sAMAccountName=$sAMAccountName to group: $newDN - $_"
                             }
                         }
                     }
