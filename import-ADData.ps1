@@ -996,8 +996,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     if ($pneColExists) {
                         $pneRawValue  = $usr.PasswordNeverExpires
                         $pneValue     = To-Bool $pneRawValue
-                    }
-                    else {
+                    } else {
                         $pneRawValue = $pneValue = $null
                     }
 
