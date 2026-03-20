@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.3
+  Version: 1.0.4
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -990,11 +990,40 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     }
 
                     # PasswordNeverExpires
-                    if ($userFlags -band 0x10000) {
+                    # Prefer dedicated CSV column "PasswordNeverExpires" when present and parseable,
+                    # otherwise fall back to userAccountControl bit (0x10000).
+                    $pneColExists = $usr.PSObject.Properties.Name -contains "PasswordNeverExpires"
+                    if ($pneColExists) {
+                        $pneRawValue  = $usr.PasswordNeverExpires
+                        $pneValue     = To-Bool $pneRawValue
+                    }
+                    else {
+                        $pneRawValue = $pneValue = $null
+                    }
+
+                    if ($pneColExists -and $pneRawValue -ne $null -and $pneRawValue.ToString().Trim() -ne "" -and $pneValue -eq $null) {
+                        $warn = "Warning: PasswordNeverExpires column value is not a valid boolean for user: $sAMAccountName (value='$pneRawValue'). Falling back to userAccountControl (0x10000)"
+                        Write-Host $warn -ForegroundColor Yellow
+                        Write-Log $warn
+                    }
+
+                    if ($pneColExists -and $pneValue -ne $null) {
+                        # Dedicated column is present and has a parseable boolean value
+                        try {
+                            Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $pneValue
+                            Write-Host "  => PasswordNeverExpires set to $pneValue for user: $sAMAccountName"
+                            Write-Log "PasswordNeverExpires set to $pneValue for user: sAMAccountName=$sAMAccountName"
+                        } catch {
+                            Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
+                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=$sAMAccountName, PasswordNeverExpires='$pneRawValue' - $_"
+                        }
+                    }
+                    elseif ($userFlags -band 0x10000) {
+                        # Fallback: userAccountControl bit
                         try {
                             Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                            Write-Host "  => PasswordNeverExpires applied: $sAMAccountName"
-                            Write-Log "PasswordNeverExpires applied: sAMAccountName=$sAMAccountName"
+                            Write-Host "  => PasswordNeverExpires applied (userAccountControl) for user: $sAMAccountName"
+                            Write-Log "PasswordNeverExpires applied (userAccountControl) for user: sAMAccountName=$sAMAccountName"
                         } catch {
                             Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
                             Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=$sAMAccountName - $_"
