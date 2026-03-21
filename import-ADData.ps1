@@ -954,10 +954,22 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                     # ChangePasswordAtLogon from dedicated column in the CSV or bits in userAccountControl - Column takes precedence
                     $changePwdColExists = $usr.PSObject.Properties.Name -contains "ChangePasswordAtLogon"
-                    $changePwdUserValue = if ($changePwdColExists) { To-Bool $usr.ChangePasswordAtLogon } else { $null }
+                    if ($changePwdColExists) {
+                        $changePwdRawValue  = $usr.ChangePasswordAtLogon
+                        $changePwdUserValue = To-Bool $changePwdRawValue
+                    } else {
+                        $changePwdRawValue = $changePwdUserValue = $null
+                    }
+
+                    # Warn when the dedicated column exists but has a non-blank invalid value (then fall back to userAccountControl logic).
+                    if ($changePwdColExists -and $changePwdRawValue -ne $null -and $changePwdRawValue.ToString().Trim() -ne "" -and $changePwdUserValue -eq $null) {
+                        $warn = "Warning: ChangePasswordAtLogon column value is not a valid boolean for user: $sAMAccountName (value='$changePwdRawValue'). Falling back to userAccountControl (0x80000)"
+                        Write-Host $warn -ForegroundColor Yellow
+                        Write-Log $warn
+                    }
 
                     if ($changePwdColExists -and $changePwdUserValue -ne $null) {
-                        # Dedicated column is present in CSV and has value
+                        # Dedicated column is present and has a parseable boolean value
                         if ($changePwdUserValue -eq $true -and -not $IsPasswordSet) {
                             Write-Host "Warning: Failed to set ChangePasswordAtLogon (column=TRUE) for account $sAMAccountName as no password is set" -ForegroundColor Yellow
                             Write-Log "Failed to set ChangePasswordAtLogon (column=TRUE) for account $sAMAccountName as no password is set"
@@ -968,7 +980,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                                 Write-Log "ChangePasswordAtLogon set to $changePwdUserValue for user: sAMAccountName=$sAMAccountName"
                             } catch {
                                 Write-Error "Failed to set ChangePasswordAtLogon for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=$sAMAccountName - $_"
+                                Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=${sAMAccountName}, ChangePasswordAtLogon='$changePwdRawValue' - $_"
                             }
                         }
                     }
@@ -1027,7 +1039,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             Write-Log "PasswordNeverExpires set to $pneValue for user: sAMAccountName=$sAMAccountName"
                         } catch {
                             Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=$sAMAccountName, PasswordNeverExpires='$pneRawValue' - $_"
+                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
                         }
                     }
                     elseif ($userFlags -band 0x10000) {
