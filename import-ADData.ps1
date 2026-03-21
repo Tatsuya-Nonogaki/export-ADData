@@ -40,13 +40,26 @@
   add a "Password" column, and put password in plain text. Do note that Password 
   is required to restore the "Enabled" flag of the account.
 
-  Note: You may also add a "ChangePasswordAtLogon" column to the user CSV.
-  If specified, this column takes precedence over the userAccountControl bit for 
-  controlling the "User must change password at next logon" setting. Acceptable 
-  values are TRUE, YES, or 1 (case-insensitive) to enable, and FALSE, NO, or 0 to 
-  disable. When set to positive value (TRUE, etc.), a password must also be provided; 
-  when set to negative value, the flag will be cleared regardless of password state, 
-  as Active Directory does not prohibit this operation.
+  Note: Dedicated CSV columns for userAccountControl-related settings
+  Some settings encoded in userAccountControl can also be controlled via dedicated
+  per-property CSV columns. This is easier and less error-prone than recalculating
+  the hexadecimal integer. The following rules apply to all such dedicated columns:
+   - Acceptable boolean values: TRUE, YES, or 1 (case-insensitive) to enable;
+     FALSE, NO, or 0 to disable.
+   - If the dedicated column is present and contains a valid boolean value, it takes
+     precedence over the corresponding userAccountControl bit.
+   - If the column is present but its value is non-blank and cannot be parsed as a
+     boolean, the script logs a warning and falls back to the userAccountControl bit.
+   - When the fallback applies, only a TRUE (bit set) result is explicitly applied;
+     a FALSE (bit not set) result is left to the destination AD defaults/policies.
+     To explicitly set a property to FALSE, use the dedicated column.
+
+  Currently supported dedicated columns:
+   - "PasswordNeverExpires"  : controls the "Password never expires" flag (0x10000).
+   - "ChangePasswordAtLogon" : controls the "User must change password at next logon"
+     flag (0x80000). Note: setting this to a positive value requires a password in
+     the "Password" column. When set to a negative value, the flag is cleared
+     regardless of password state, as Active Directory does not prohibit this.
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
@@ -941,10 +954,22 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                     # ChangePasswordAtLogon from dedicated column in the CSV or bits in userAccountControl - Column takes precedence
                     $changePwdColExists = $usr.PSObject.Properties.Name -contains "ChangePasswordAtLogon"
-                    $changePwdUserValue = if ($changePwdColExists) { To-Bool $usr.ChangePasswordAtLogon } else { $null }
+                    if ($changePwdColExists) {
+                        $changePwdRawValue  = $usr.ChangePasswordAtLogon
+                        $changePwdUserValue = To-Bool $changePwdRawValue
+                    } else {
+                        $changePwdRawValue = $changePwdUserValue = $null
+                    }
+
+                    # Warn when the dedicated column exists but has a non-blank invalid value (then fall back to userAccountControl logic).
+                    if ($changePwdColExists -and $changePwdRawValue -ne $null -and $changePwdRawValue.ToString().Trim() -ne "" -and $changePwdUserValue -eq $null) {
+                        $warn = "Warning: ChangePasswordAtLogon column value is not a valid boolean for user: $sAMAccountName (value='$changePwdRawValue'). Falling back to userAccountControl (0x80000)"
+                        Write-Host $warn -ForegroundColor Yellow
+                        Write-Log $warn
+                    }
 
                     if ($changePwdColExists -and $changePwdUserValue -ne $null) {
-                        # Dedicated column is present in CSV and has value
+                        # Dedicated column is present and has a parseable boolean value
                         if ($changePwdUserValue -eq $true -and -not $IsPasswordSet) {
                             Write-Host "Warning: Failed to set ChangePasswordAtLogon (column=TRUE) for account $sAMAccountName as no password is set" -ForegroundColor Yellow
                             Write-Log "Failed to set ChangePasswordAtLogon (column=TRUE) for account $sAMAccountName as no password is set"
@@ -955,7 +980,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                                 Write-Log "ChangePasswordAtLogon set to $changePwdUserValue for user: sAMAccountName=$sAMAccountName"
                             } catch {
                                 Write-Error "Failed to set ChangePasswordAtLogon for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=$sAMAccountName - $_"
+                                Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=${sAMAccountName}, ChangePasswordAtLogon='$changePwdRawValue' - $_"
                             }
                         }
                     }
@@ -1014,7 +1039,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             Write-Log "PasswordNeverExpires set to $pneValue for user: sAMAccountName=$sAMAccountName"
                         } catch {
                             Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=$sAMAccountName, PasswordNeverExpires='$pneRawValue' - $_"
+                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
                         }
                     }
                     elseif ($userFlags -band 0x10000) {
