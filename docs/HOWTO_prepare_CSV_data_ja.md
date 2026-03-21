@@ -50,7 +50,6 @@
        - `"PasswordNeverExpires"` — "Password never expires" フラグを制御
        - `"ChangePasswordAtLogon"` — 次回ログオン時にパスワードの再設定を強制するかどうかを制御。ただし、当属性を真にするには、`"Password"`列も入力されている必要があります。詳しくは、README や `import-ADData.ps1` のヘルプを参照してください。
 
-
    不要な列を削除するには、いくつか方法があります:  
 
    - **手動で削除 (Excel)**  
