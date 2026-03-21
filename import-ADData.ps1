@@ -40,13 +40,26 @@
   add a "Password" column, and put password in plain text. Do note that Password 
   is required to restore the "Enabled" flag of the account.
 
-  Note: You may also add a "ChangePasswordAtLogon" column to the user CSV.
-  If specified, this column takes precedence over the userAccountControl bit for 
-  controlling the "User must change password at next logon" setting. Acceptable 
-  values are TRUE, YES, or 1 (case-insensitive) to enable, and FALSE, NO, or 0 to 
-  disable. When set to positive value (TRUE, etc.), a password must also be provided; 
-  when set to negative value, the flag will be cleared regardless of password state, 
-  as Active Directory does not prohibit this operation.
+  Note: Dedicated CSV columns for userAccountControl-related settings
+  Some settings encoded in userAccountControl can also be controlled via dedicated
+  per-property CSV columns. This is easier and less error-prone than recalculating
+  the hexadecimal integer. The following rules apply to all such dedicated columns:
+   - Acceptable boolean values: TRUE, YES, or 1 (case-insensitive) to enable;
+     FALSE, NO, or 0 to disable.
+   - If the dedicated column is present and contains a valid boolean value, it takes
+     precedence over the corresponding userAccountControl bit.
+   - If the column is present but its value is non-blank and cannot be parsed as a
+     boolean, the script logs a warning and falls back to the userAccountControl bit.
+   - When the fallback applies, only a TRUE (bit set) result is explicitly applied;
+     a FALSE (bit not set) result is left to the destination AD defaults/policies.
+     To explicitly set a property to FALSE, use the dedicated column.
+
+  Currently supported dedicated columns:
+   - "PasswordNeverExpires"  : controls the "Password never expires" flag (0x10000).
+   - "ChangePasswordAtLogon" : controls the "User must change password at next logon"
+     flag (0x80000). Note: setting this to a positive value requires a password in
+     the "Password" column. When set to a negative value, the flag is cleared
+     regardless of password state, as Active Directory does not prohibit this.
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.

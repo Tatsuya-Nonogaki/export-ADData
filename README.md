@@ -226,22 +226,28 @@ To set a password for users during import, add a `"Password"` column to your Use
 **Password is required to `Enable` an account during import.**  
 If the password is absent for a user, the account will be created but remain disabled.
 
-##### Controlling the "User must change password at next logon" flag
+##### Dedicated CSV columns for userAccountControl-related settings
 
-You have two options to control the "User must change password at next logon" (`ChangePasswordAtLogon`) setting for users to be imported:
+Some settings encoded in `userAccountControl` can also be controlled via dedicated per-property CSV columns. This is easier and less error-prone than recalculating the hexadecimal integer.
 
-- **Via a dedicated CSV column:**  
-  Add a `"ChangePasswordAtLogon"` column to your User CSV.  
-  - If you set this column to a **positive value** (`TRUE`, `YES`, or `1`, case-insensitive), the flag will be explicitly set (user must change password at next logon).  
-  - If set to a **negative value** (`FALSE`, `NO`, or `0`), the flag will be explicitly cleared.
-  - **When setting this to POSITIVE VALUE a password is required in the `"Password"` column for that user.**
-  - When setting it to a negative value, the flag will be cleared regardless of whether a password is set, as Active Directory does not prohibit this operation.
+**Common rules for all dedicated columns:**
 
-- **Via userAccountControl bit (legacy/fallback):**  
-  If the `"ChangePasswordAtLogon"` column is not present or is blank for a user, the script will honor the `0x80000` bit in the `userAccountControl` column, **if set**, provided a password is also present. If both the `0x80000` bit and the `"ChangePasswordAtLogon"` column are either absent or indicate a negative value, the script **does not clear** the "User must change password at next logon" flag; instead, the default password policy of the destination AD will apply.
+- Acceptable boolean values: `TRUE`, `YES`, or `1` (case-insensitive) to enable; `FALSE`, `NO`, or `0` to disable.
+- If a dedicated column is present and contains a valid boolean value, it takes **precedence** over the corresponding `userAccountControl` bit.
+- If the column is present but its value is non-blank and cannot be parsed as a boolean, the script logs a warning and **falls back** to the `userAccountControl` bit.
+- When the fallback applies, only a TRUE (bit set) result is explicitly applied; a FALSE (bit not set) result is left to the destination AD defaults/policies. To explicitly set a property to `FALSE`, use the dedicated column.
 
-**Golden rule:**  
-The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence over the userAccountControl bit.
+**Currently supported dedicated columns:**
+
+| Column name              | Controls                                         | userAccountControl bit |
+|--------------------------|--------------------------------------------------|------------------------|
+| `PasswordNeverExpires`   | "Password never expires"                         | `0x10000`              |
+| `ChangePasswordAtLogon`  | "User must change password at next logon"        | `0x80000`              |
+
+##### Special rules for `ChangePasswordAtLogon`
+
+- **When set to a positive value** (`TRUE`, `YES`, or `1`): a password must also be provided in the `"Password"` column. If no password is present, the script warns and does not set the flag.
+- **When set to a negative value** (`FALSE`, `NO`, or `0`): the flag is cleared regardless of password state, as Active Directory does not prohibit this operation.
 
 **Summary Table:**
 
@@ -251,8 +257,8 @@ The `"ChangePasswordAtLogon"` column, if present and non-blank, takes precedence
 | FALSE/NO/0                     | Yes          | Set-ADUser -ChangePasswordAtLogon $false                   |
 | TRUE/YES/1                     | No           | Warn, do not set                                           |
 | FALSE/NO/0                     | No           | Set-ADUser -ChangePasswordAtLogon $false (this is allowed) |
-| blank/missing                  | Yes          | userAccountControl bit `0x80000` → set flag if present     |
-| blank/missing                  | No           | userAccountControl bit `0x80000` → warn, do not set        |
+| blank/missing/invalid          | Yes          | userAccountControl bit `0x80000` → set flag if present     |
+| blank/missing/invalid          | No           | userAccountControl bit `0x80000` → warn, do not set        |
 
 ---
 

@@ -44,7 +44,12 @@
 
        - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row’s `Password` field is empty, `import-ADData.ps1` simply ignores it.
 
-       - You may also add a `"ChangePasswordAtLogon"` column to control whether users must change their password at next logon. Acceptable values are `TRUE`, `YES`, or `1` to enable, and `FALSE`, `NO`, or `0` to disable. This column takes precedence over the `userAccountControl` property for this setting. To activate this feature, you may need to use the `"Password"` column together with `"ChangePasswordAtLogon"`. For more details, see the README and `import-ADData.ps1` help.
+       - **Dedicated columns for `userAccountControl`-related settings:**  
+         Some settings encoded in `userAccountControl` can be controlled via dedicated per-property CSV columns, which is easier and less error-prone than recalculating the hexadecimal integer.  
+         Acceptable boolean values are `TRUE`, `YES`, or `1` (case-insensitive) to enable, and `FALSE`, `NO`, or `0` to disable. A dedicated column (if present and non-blank) takes precedence over the corresponding `userAccountControl` bit. If the value is non-blank but not parseable as a boolean, the script logs a warning and falls back to the bit. When falling back, only a TRUE (bit set) result is explicitly applied; a FALSE (bit not set) result is left to the destination AD defaults/policies.  
+         Currently supported dedicated columns:
+         - `"PasswordNeverExpires"` — controls the "Password never expires" flag.
+         - `"ChangePasswordAtLogon"` — controls the "User must change password at next logon" flag. Note: setting this to a positive value requires the `"Password"` column to also be filled in. For full details, see the README and `import-ADData.ps1` help.
 
    You can remove columns in either of the following ways:
 
