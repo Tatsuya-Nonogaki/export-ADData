@@ -1004,8 +1004,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         } else {
                             try {
                                 Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $changePwdUserValue
-                                Write-Host "  => ChangePasswordAtLogon set to $changePwdUserValue for user: $sAMAccountName"
-                                Write-Log "ChangePasswordAtLogon set to $changePwdUserValue for user: sAMAccountName=$sAMAccountName"
+                                Write-Host "  => ChangePasswordAtLogon set to $changePwdUserValue (dedicated column) for user: $sAMAccountName"
+                                Write-Log "ChangePasswordAtLogon set to $changePwdUserValue (dedicated column) for user: sAMAccountName=$sAMAccountName"
                             } catch {
                                 Write-Error "Failed to set ChangePasswordAtLogon for user ${sAMAccountName}: $_"
                                 Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=${sAMAccountName}, ChangePasswordAtLogon='$changePwdRawValue' - $_"
@@ -1016,8 +1016,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         # Fallback: userAccountControl bit
                         try {
                             Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
-                            Write-Host "  => ChangePasswordAtLogon applied (userAccountControl) for user: $sAMAccountName"
-                            Write-Log "ChangePasswordAtLogon applied (userAccountControl) for user: sAMAccountName=$sAMAccountName"
+                            Write-Host "  => ChangePasswordAtLogon set to True (userAccountControl) for user: $sAMAccountName"
+                            Write-Log "ChangePasswordAtLogon set to True (userAccountControl) for user: sAMAccountName=$sAMAccountName"
                         } catch {
                             Write-Error "Failed to set ChangePasswordAtLogon (userAccountControl) for user ${sAMAccountName}: $_"
                             Write-Log "Failed to set ChangePasswordAtLogon (userAccountControl) for user: sAMAccountName=$sAMAccountName - $_"
@@ -1063,8 +1063,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         # Dedicated column is present and has a parseable boolean value
                         try {
                             Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $pneValue
-                            Write-Host "  => PasswordNeverExpires set to $pneValue for user: $sAMAccountName"
-                            Write-Log "PasswordNeverExpires set to $pneValue for user: sAMAccountName=$sAMAccountName"
+                            Write-Host "  => PasswordNeverExpires set to $pneValue (dedicated column) for user: $sAMAccountName"
+                            Write-Log "PasswordNeverExpires set to $pneValue (dedicated column) for user: sAMAccountName=$sAMAccountName"
                         } catch {
                             Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
                             Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
@@ -1074,8 +1074,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         # Fallback: userAccountControl bit
                         try {
                             Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                            Write-Host "  => PasswordNeverExpires applied (userAccountControl) for user: $sAMAccountName"
-                            Write-Log "PasswordNeverExpires applied (userAccountControl) for user: sAMAccountName=$sAMAccountName"
+                            Write-Host "  => PasswordNeverExpires set to True (userAccountControl) for user: $sAMAccountName"
+                            Write-Log "PasswordNeverExpires set to True (userAccountControl) for user: sAMAccountName=$sAMAccountName"
                         } catch {
                             Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
                             Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=$sAMAccountName - $_"
