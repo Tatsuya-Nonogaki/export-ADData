@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.4
+  Version: 1.0.5
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -788,6 +788,31 @@ Review your CSV. To override this check, use -NoClassCheck.)
         return $null
     }
 
+    # Check CSV column name duplication
+    function Assert-NoDuplicateCsvColumns {
+        param(
+            [string]$Path
+        )
+
+        $headerLine = Get-Content -Path $Path -TotalCount 1
+        $cols = $headerLine -split ',' | ForEach-Object { $_.Trim().Trim('"') }
+
+        $dupCols =
+            $cols |
+            Where-Object { $_ -ne "" } |
+            Group-Object { $_.ToLower() } |
+            Where-Object { $_.Count -gt 1 } |
+            ForEach-Object { $_.Group[0] }   # keep original spelling (first occurrence)
+
+        if ($dupCols.Count -gt 0) {
+            $dupList = ($dupCols | ForEach-Object { "'$_'" }) -join ", "
+            $msg = "Error: Duplicate column name(s) found in CSV header: $dupList"
+            Write-Host $msg -ForegroundColor Red
+            Write-Log $msg
+            exit 2
+        }
+    }
+
     # Import AD objects from the CSV file
     function Import-ADObject {
         param (
@@ -809,6 +834,9 @@ Review your CSV. To override this check, use -NoClassCheck.)
         #   $excludedComputers += @("SPECIALPC01$", "SPECIALPC02$")
 
         if ($objectClass -eq "user") {
+            # Check column duplication
+            Assert-NoDuplicateCsvColumns -Path $filePath
+
             $users = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
@@ -1116,6 +1144,9 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
         } elseif ($objectClass -eq "group") {
             # Import and sort groups by the total character length of MemberOf property
+            # Check column duplication
+            Assert-NoDuplicateCsvColumns -Path $filePath
+
             $groups = Import-Csv -Path $filePath | 
                       Where-Object {
                         if ($IncludeSystemObject) {
@@ -1260,6 +1291,9 @@ Review your CSV. To override this check, use -NoClassCheck.)
             }
 
         } elseif ($objectClass -eq "computer") {
+            # Check column duplication
+            Assert-NoDuplicateCsvColumns -Path $filePath
+
             $computers = Import-Csv -Path $filePath | Where-Object {
                 if ($IncludeSystemObject) {
                     return $true
@@ -1401,6 +1435,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
             [string]$DNPath
         )
 
+        # Check column duplication and import the CSV
+        Assert-NoDuplicateCsvColumns -Path $GroupFile
         $groups = Import-Csv -Path $GroupFile
 
         foreach ($grp in $groups) {
