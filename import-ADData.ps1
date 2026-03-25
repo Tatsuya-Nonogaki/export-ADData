@@ -1029,18 +1029,6 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         Write-Log "Failed to set ChangePasswordAtLogon (userAccountControl) for account $sAMAccountName as no password is set"
                     }
 
-                    # CannotChangePassword
-                    if ($userFlags -band 0x40) {
-                        try {
-                            $acuser = Get-ADUser -Identity $sAMAccountName
-                            Set-ACL -Path "AD:\$($acuser.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($acuser.DistinguishedName)" | ForEach-Object { $usr.Access | Where-Object { $usr.ObjectType -eq [Guid]::Parse("4c164200-20c0-11d0-a768-00aa006e0529") -and $usr.ActiveDirectoryRights -eq "ExtendedRight" -and $usr.AccessControlType -eq "Deny" } })
-                            Write-Host "  => CannotChangePassword applied: $sAMAccountName"
-                            Write-Log "CannotChangePassword applied: sAMAccountName=$sAMAccountName"
-                        } catch {
-                            Write-Error "Failed to process CannotChangePassword for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to process CannotChangePassword for user: sAMAccountName=$sAMAccountName - $_"
-                        }
-                    }
 
                     # PasswordNeverExpires
                     # Prefer dedicated CSV column "PasswordNeverExpires" when present and parseable,
