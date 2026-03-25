@@ -1151,6 +1151,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                                 }
                             }
                         } else {
+                            # Dedicated column explicitly sets PasswordNeverExpires=FALSE
                             try {
                                 Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $false
                                 Write-Host "  => PasswordNeverExpires set to False for user: $sAMAccountName"
