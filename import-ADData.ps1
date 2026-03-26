@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.5
+  Version: 1.0.6
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
