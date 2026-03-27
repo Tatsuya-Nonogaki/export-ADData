@@ -1120,18 +1120,22 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     # CCP=TRUE and CPL=TRUE conflict: skip CPL to prevent deadlock (only when CCP is known)
                     if ($ccpKnown -and $ccpWanted -eq $true -and $cplWanted -eq $true) {
                         $warn = "Warning: CannotChangePassword=TRUE and ChangePasswordAtLogon=TRUE conflict for user '$sAMAccountName'. Policy CCP > CPL: skipping ChangePasswordAtLogon."
+                        $info = "CPL requested TRUE ($cplSource) was skipped due to CCP conflict for user: $sAMAccountName"
                         Write-Host $warn -ForegroundColor Yellow
                         Write-Log  $warn
-                        Write-Verbose "CPL requested TRUE ($cplSource) was skipped due to CCP conflict for user: $sAMAccountName"
+                        Write-Verbose $info
+                        Write-Log  $info
                         $cplWanted = $false
                     }
 
                     # CPL=TRUE and PNE=TRUE conflict: skip PNE
                     if ($cplWanted -eq $true -and $pneWanted -eq $true) {
                         $warn = "Warning: ChangePasswordAtLogon=TRUE and PasswordNeverExpires=TRUE conflict for user '$sAMAccountName'. Policy CPL > PNE: skipping PasswordNeverExpires."
+                        $info = "PNE requested TRUE ($pneSource) was skipped due to CPL conflict for user: $sAMAccountName"
                         Write-Host $warn -ForegroundColor Yellow
                         Write-Log  $warn
-                        Write-Verbose "PNE requested TRUE ($pneSource) was skipped due to CPL conflict for user: $sAMAccountName"
+                        Write-Verbose $info
+                        Write-Log  $info
                         $pneWanted = $false
                     }
 
@@ -1174,14 +1178,18 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             $cplEffective = IsChangePasswordAtLogonEffective -SamAccountName $sAMAccountName
                             if ($cplEffective -eq $true) {
                                 $warn = "Warning: Destination user '$sAMAccountName' has ChangePasswordAtLogon effectively TRUE (pwdLastSet=0). Skipping PasswordNeverExpires=TRUE to prevent conflict."
+                                $info = "PNE requested TRUE ($pneSource) was skipped due to destination safety check (pwdLastSet=0) for user: $sAMAccountName"
                                 Write-Host $warn -ForegroundColor Yellow
                                 Write-Log  $warn
-                                Write-Verbose "PNE requested TRUE ($pneSource) was skipped due to destination safety check (pwdLastSet=0) for user: $sAMAccountName"
+                                Write-Verbose $info
+                                Write-Log  $info
                             } elseif ($null -eq $cplEffective) {
                                 $warn = "Warning: Could not verify ChangePasswordAtLogon state for destination user '$sAMAccountName'. Skipping PasswordNeverExpires=TRUE (safe-by-default)."
+                                $info = "PNE requested TRUE ($pneSource) was skipped because destination pwdLastSet could not be verified for user: $sAMAccountName"
                                 Write-Host $warn -ForegroundColor Yellow
                                 Write-Log  $warn
-                                Write-Verbose "PNE requested TRUE ($pneSource) was skipped because destination pwdLastSet could not be verified for user: $sAMAccountName"
+                                Write-Verbose $info
+                                Write-Log  $info
                             } else {
                                 try {
                                     Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
