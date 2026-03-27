@@ -48,7 +48,9 @@
   contradictory combinations.
 
   Currently recognized columns:
-   - "CannotChangePassword"  : CCP. Used for conflict detection only; not applied to AD.
+   - "CannotChangePassword"  : CCP. Controls whether the user can change password.
+     This script applies CCP=TRUE to AD (best-effort) when requested. CCP=FALSE is not
+     actively forced and is left to the destination AD defaults/policies.
    - "ChangePasswordAtLogon" : CPL. Controls "User must change password at next logon".
      When set to TRUE, a password in the "Password" column is required to enforce it.
    - "PasswordNeverExpires"  : PNE. Controls the "Password never expires" setting.
@@ -75,8 +77,11 @@
   IMPORTANT: The "CannotChangePassword" column must be present in the User CSV.
    - This column is included by default in the raw CSV produced by export-ADData.ps1.
      Do not delete this column.
-   - Do not rewrite its values, because the column is used for conflict detection only
-     and is not actively applied to AD.
+   - You may edit its values if you intentionally want to change the CCP setting to be
+     imported to the destination AD. Note that CCP has the highest priority in the
+     normalization/conflict-resolution policy (CCP > CPL > PNE). Changing CCP may change
+     how conflicts are resolved and can affect the final results of both
+     ChangePasswordAtLogon and PasswordNeverExpires.
 
   Normalization policy (priority order: CCP > CPL > PNE):
    - If CCP=TRUE and CPL=TRUE are both requested, CPL is skipped (CCP wins).
@@ -1058,7 +1063,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         $cplSource = "userAccountControl"
                     }
 
-                    # --- CCP (CannotChangePassword): reference only, DO NOT APPLY (no ACL change) ---
+                    # --- CCP (CannotChangePassword): dedicated column only (no UAC fallback) ---
                     $ccpColExists = $usr.PSObject.Properties.Name -contains "CannotChangePassword"
                     $ccpKnown     = $false   # CCP = CannotChangePassword: whether ccpWanted is a valid known value
                     $ccpMissing   = $false   # CCP: column is absent from the CSV
@@ -1140,7 +1145,24 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     }
 
                     # ----------------------------------------------------------------
-                    # Apply CPL (CCP is never applied to AD)
+                    # Apply CCP (CannotChangePassword): highest priority in CCP/CPL/PNE, best-effort.
+                    # Applied only when CCP=TRUE is requested, intentionally avoiding setting FALSE
+                    # so that destination ACLs/delegation defaults are respected.
+                    # ----------------------------------------------------------------
+                    if ($ccpWanted -eq $true) {
+                        try {
+                            Set-ADUser -Identity $sAMAccountName -CannotChangePassword $true
+                            Write-Host "  => CannotChangePassword set to True for user: $sAMAccountName (column)"
+                            Write-Log  "CannotChangePassword set to True for user: sAMAccountName=$sAMAccountName source=column"
+                        } catch {
+                            $warn = "Warning: Failed to set CannotChangePassword=TRUE for user '$sAMAccountName'. Continuing. Error: $_"
+                            Write-Host $warn -ForegroundColor Yellow
+                            Write-Log  $warn
+                        }
+                    }
+
+                    # ----------------------------------------------------------------
+                    # Apply CPL (ChangePasswordAtLogon)
                     # ----------------------------------------------------------------
                     if ($cplWanted -ne $null) {
                         # When applying CPL=TRUE but CCP status is unknown, warn that deadlock check was skipped.
@@ -1170,7 +1192,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     }
 
                     # ----------------------------------------------------------------
-                    # Apply PNE with destination-state safety check before applying TRUE
+                    # Apply PNE (PasswordNeverExpires) with destination-state safety check before applying TRUE
                     # ----------------------------------------------------------------
                     if ($pneWanted -ne $null) {
                         if ($pneWanted -eq $true) {
