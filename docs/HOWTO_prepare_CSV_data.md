@@ -37,19 +37,30 @@
 
      - For Users:  
 
-       `MemberOf,Manager,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
+       `MemberOf,Manager,CannotChangePassword,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
 
        📝 **Note:**
        - Some columns such as `CanonicalName`, `CN`, `codePage`, `HomePage`, `Initials`, `Organization`, `PrimaryGroup`, `sAMAccountType` are not currently used by `import-ADData.ps1`. But it is recommended to keep them for reference or future utilization.
 
        - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row’s `Password` field is empty, `import-ADData.ps1` simply ignores it.
 
-       - **Dedicated columns for `userAccountControl`-related settings:**  
-         Some settings encoded in `userAccountControl` can be controlled via dedicated per-property CSV columns, which is easier and less error-prone than recalculating the hexadecimal integer.  
-         Acceptable boolean values are `TRUE`, `YES`, or `1` (case-insensitive) to enable, and `FALSE`, `NO`, or `0` to disable. A dedicated column (if present and non-blank) takes precedence over the corresponding `userAccountControl` bit. If the value is non-blank but not parseable as a boolean, the script logs a warning and falls back to the bit. When falling back, only a TRUE (bit set) result is explicitly applied; a FALSE (bit not set) result is left to the destination AD defaults/policies.  
-         Currently supported dedicated columns:
-         - `"PasswordNeverExpires"` — controls the "Password never expires" flag.
-         - `"ChangePasswordAtLogon"` — controls the "User must change password at next logon" flag. Note: setting this to a positive value requires the `"Password"` column to also be filled in. For full details, see the README and `import-ADData.ps1` help.
+       - **Dedicated columns for `userAccountControl`-related settings (CCP/CPL/PNE):**  
+         Some password-policy-related settings are normally encoded in `userAccountControl`, but `import-ADData.ps1` supports dedicated per-property columns for safer editing and import.
+
+         - Recognized columns:  
+           - `"CannotChangePassword"` (CCP): included by `export-ADData.ps1` by default
+           - `"ChangePasswordAtLogon"` (CPL): add this column if needed
+           - `"PasswordNeverExpires"` (PNE): included by `export-ADData.ps1` by default
+         - Acceptable boolean values: `TRUE`, `YES`, or `1` (case-insensitive) to enable; `FALSE`, `NO`, or `0` to disable.
+         - If a column exists and contains a valid boolean value, it takes precedence over the corresponding `userAccountControl` bit (when applicable).
+         - Fallback behavior:
+           - CPL/PNE may fall back to the corresponding `userAccountControl` bit, but only introduces the **TRUE (bit set)** case.
+           - CCP does **not** fall back to `userAccountControl` bit `0x40`.
+         - CCP is applied best-effort only when CCP=TRUE is requested; CCP=FALSE is intentionally not forced so destination ACLs/delegation defaults are respected.
+         - These three settings (CCP/CPL/PNE) can contradict each other, so `import-ADData.ps1` evaluates them with a conflict-resolution policy to avoid unsafe combinations (e.g., `ChangePasswordAtLogon` requests an immediate password change, while `CannotChangePassword` denies password changes—both cannot be effective at the same time).  
+           Conflict-resolution priority: **CCP > CPL > PNE** (contradictory TRUE combinations may be skipped).
+
+         For full details (including the normalization and conflict-resolution policies, plus the PNE safety check), see the repository [README](../README.md) and `import-ADData.ps1` help.
 
    You can remove columns in either of the following ways:
 

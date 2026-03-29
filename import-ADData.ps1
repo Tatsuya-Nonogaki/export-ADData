@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.5
+  Version: 1.0.6
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -40,26 +40,59 @@
   add a "Password" column, and put password in plain text. Do note that Password 
   is required to restore the "Enabled" flag of the account.
 
-  Note: Dedicated CSV columns for userAccountControl-related settings
-  Some settings encoded in userAccountControl can also be controlled via dedicated
-  per-property CSV columns. This is easier and less error-prone than recalculating
-  the hexadecimal integer. The following rules apply to all such dedicated columns:
-   - Acceptable boolean values: TRUE, YES, or 1 (case-insensitive) to enable;
-     FALSE, NO, or 0 to disable.
-   - If the dedicated column is present and contains a valid boolean value, it takes
-     precedence over the corresponding userAccountControl bit.
-   - If the column is present but its value is non-blank and cannot be parsed as a
-     boolean, the script logs a warning and falls back to the userAccountControl bit.
-   - When the fallback applies, only a TRUE (bit set) result is explicitly applied;
-     a FALSE (bit not set) result is left to the destination AD defaults/policies.
-     To explicitly set a property to FALSE, use the dedicated column.
+  Note: CSV columns related to userAccountControl / password policy (CCP/CPL/PNE)
 
-  Currently supported dedicated columns:
-   - "PasswordNeverExpires"  : controls the "Password never expires" flag (0x10000).
-   - "ChangePasswordAtLogon" : controls the "User must change password at next logon"
-     flag (0x80000). Note: setting this to a positive value requires a password in
-     the "Password" column. When set to a negative value, the flag is cleared
-     regardless of password state, as Active Directory does not prohibit this.
+  Some password-policy-related settings are normally encoded in the integer
+  "userAccountControl" bit field. To make imports safer and easier, this script
+  supports per-property CSV columns and applies a normalization policy to avoid
+  contradictory combinations.
+
+  Currently recognized columns:
+   - "CannotChangePassword" (CCP): Controls whether the user can change their password.
+     The column is included by default in the raw CSV produced by export-ADData.ps1.
+     This script applies CCP=TRUE to AD (best-effort) when requested. CCP=FALSE is not
+     actively forced and is left to the destination AD defaults/policies.
+   - "ChangePasswordAtLogon" (CPL): Controls "User must change password at next logon".
+     Add this column if needed.
+     When set to TRUE, a password in the "Password" column is required to enforce it.
+   - "PasswordNeverExpires" (PNE): Controls the "Password never expires" setting.
+     The column is included by default in the raw CSV produced by export-ADData.ps1.
+
+  Boolean parsing rules (applies to all columns listed above):
+   - Acceptable values: TRUE, YES, or 1 (case-insensitive) to enable;
+     FALSE, NO, or 0 to disable.
+   - If the column exists and contains a valid boolean value, it takes precedence
+     over the corresponding userAccountControl bit (when applicable).
+   - If the column exists but its value is non-blank and cannot be parsed as a
+     boolean, the script logs a warning and treats it as unknown for that column.
+
+  Fallback rules when the dedicated column is missing or invalid:
+   - For CPL and PNE, the script may fall back to userAccountControl bits, but only
+     explicitly applies the TRUE (bit set) case. The FALSE (bit not set) case is
+     left to the destination AD defaults/policies unless the CSV explicitly sets
+     the property to FALSE via the column.
+   - For CCP, the script does NOT fall back to userAccountControl bit 0x40, because
+     "CannotChangePassword" is ACL-based and the bit is not a reliable indicator.
+   - Note: even when a TRUE value is determined (from column or fallback), the
+     normalization or safety policy may still skip applying it, resulting in an
+     effective FALSE outcome.
+
+  IMPORTANT: The "CannotChangePassword" column must be present in the User CSV.
+   - This column is included by export-ADData.ps1 by default. Do not delete the column.
+   - You may edit its values if you intentionally want to change the CCP setting to be
+     imported to the destination AD. Note that CCP has the highest priority in the
+     normalization/conflict-resolution policy (CCP > CPL > PNE). Changing CCP may change
+     how conflicts are resolved and can affect the final results of both
+     ChangePasswordAtLogon and PasswordNeverExpires.
+
+  Normalization policy (priority order: CCP > CPL > PNE):
+   - If CCP=TRUE and CPL=TRUE are both requested, CPL is skipped (CCP wins).
+   - If CPL=TRUE and PNE=TRUE are both requested, PNE is skipped (CPL wins).
+
+  Safety check on the destination AD before applying PNE=TRUE:
+   - This script checks the destination account state (pwdLastSet) and skips
+     PasswordNeverExpires=TRUE if the account is effectively in "must change password
+     at next logon" state, or if that state cannot be verified.
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
@@ -1021,12 +1054,18 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         Write-Log $warn
                     }
 
+                    # Determine CPL source and apply fallback.
+                    $cplSource = "none"  # "column" | "userAccountControl" | "none"
+                    if ($cplColExists -and $null -ne $cplWanted) {
+                        $cplSource = "column"
+                    }
                     # Fallback: UAC bit 0x80000; only applies TRUE (FALSE is left to AD defaults unless column says FALSE).
                     if ((-not $cplColExists -or $cplWanted -eq $null) -and ($userFlags -band 0x80000)) {
                         $cplWanted = $true
+                        $cplSource = "userAccountControl"
                     }
 
-                    # --- CCP (CannotChangePassword): reference only, DO NOT APPLY (no ACL change) ---
+                    # --- CCP (CannotChangePassword): dedicated column only (no UAC fallback) ---
                     $ccpColExists = $usr.PSObject.Properties.Name -contains "CannotChangePassword"
                     $ccpKnown     = $false   # CCP = CannotChangePassword: whether ccpWanted is a valid known value
                     $ccpMissing   = $false   # CCP: column is absent from the CSV
@@ -1070,9 +1109,15 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         Write-Log $warn
                     }
 
+                    # Determine PNE source and apply fallback.
+                    $pneSource = "none"  # "column" | "userAccountControl" | "none"
+                    if ($pneColExists -and $null -ne $pneWanted) {
+                        $pneSource = "column"
+                    }
                     # Fallback: UAC bit 0x10000; only applies TRUE (FALSE is left to AD defaults unless column says FALSE).
                     if ((-not $pneColExists -or $pneWanted -eq $null) -and ($userFlags -band 0x10000)) {
                         $pneWanted = $true
+                        $pneSource = "userAccountControl"
                     }
 
                     # ----------------------------------------------------------------
@@ -1082,21 +1127,44 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     # CCP=TRUE and CPL=TRUE conflict: skip CPL to prevent deadlock (only when CCP is known)
                     if ($ccpKnown -and $ccpWanted -eq $true -and $cplWanted -eq $true) {
                         $warn = "Warning: CannotChangePassword=TRUE and ChangePasswordAtLogon=TRUE conflict for user '$sAMAccountName'. Policy CCP > CPL: skipping ChangePasswordAtLogon."
+                        $info = "CPL requested TRUE ($cplSource) was skipped due to CCP conflict for user: $sAMAccountName"
                         Write-Host $warn -ForegroundColor Yellow
                         Write-Log  $warn
+                        Write-Verbose $info
+                        Write-Log  $info
                         $cplWanted = $false
                     }
 
                     # CPL=TRUE and PNE=TRUE conflict: skip PNE
                     if ($cplWanted -eq $true -and $pneWanted -eq $true) {
                         $warn = "Warning: ChangePasswordAtLogon=TRUE and PasswordNeverExpires=TRUE conflict for user '$sAMAccountName'. Policy CPL > PNE: skipping PasswordNeverExpires."
+                        $info = "PNE requested TRUE ($pneSource) was skipped due to CPL conflict for user: $sAMAccountName"
                         Write-Host $warn -ForegroundColor Yellow
                         Write-Log  $warn
+                        Write-Verbose $info
+                        Write-Log  $info
                         $pneWanted = $false
                     }
 
                     # ----------------------------------------------------------------
-                    # Apply CPL (CCP is never applied to AD)
+                    # Apply CCP (CannotChangePassword): highest priority in CCP/CPL/PNE, best-effort.
+                    # Applied only when CCP=TRUE is requested, intentionally avoiding setting FALSE
+                    # so that destination ACLs/delegation defaults are respected.
+                    # ----------------------------------------------------------------
+                    if ($ccpWanted -eq $true) {
+                        try {
+                            Set-ADUser -Identity $sAMAccountName -CannotChangePassword $true
+                            Write-Host "  => CannotChangePassword set to True for user: $sAMAccountName (column)"
+                            Write-Log  "CannotChangePassword set to True for user: sAMAccountName=$sAMAccountName source=column"
+                        } catch {
+                            $warn = "Warning: Failed to set CannotChangePassword=TRUE for user '$sAMAccountName'. Continuing. Error: $_"
+                            Write-Host $warn -ForegroundColor Yellow
+                            Write-Log  $warn
+                        }
+                    }
+
+                    # ----------------------------------------------------------------
+                    # Apply CPL (ChangePasswordAtLogon)
                     # ----------------------------------------------------------------
                     if ($cplWanted -ne $null) {
                         # When applying CPL=TRUE but CCP status is unknown, warn that deadlock check was skipped.
@@ -1116,8 +1184,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         } else {
                             try {
                                 Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $cplWanted
-                                Write-Host "  => ChangePasswordAtLogon set to $cplWanted for user: $sAMAccountName"
-                                Write-Log  "ChangePasswordAtLogon set to $cplWanted for user: sAMAccountName=$sAMAccountName"
+                                Write-Host "  => ChangePasswordAtLogon set to $cplWanted for user: $sAMAccountName ($cplSource)"
+                                Write-Log  "ChangePasswordAtLogon set to $cplWanted for user: sAMAccountName=$sAMAccountName source=$cplSource"
                             } catch {
                                 Write-Error "Failed to set ChangePasswordAtLogon for user ${sAMAccountName}: $_"
                                 Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=${sAMAccountName}, ChangePasswordAtLogon='$cplRawValue' - $_"
@@ -1126,7 +1194,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     }
 
                     # ----------------------------------------------------------------
-                    # Apply PNE with destination-state safety check before applying TRUE
+                    # Apply PNE (PasswordNeverExpires) with destination-state safety check before applying TRUE
                     # ----------------------------------------------------------------
                     if ($pneWanted -ne $null) {
                         if ($pneWanted -eq $true) {
@@ -1134,17 +1202,23 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             $cplEffective = IsChangePasswordAtLogonEffective -SamAccountName $sAMAccountName
                             if ($cplEffective -eq $true) {
                                 $warn = "Warning: Destination user '$sAMAccountName' has ChangePasswordAtLogon effectively TRUE (pwdLastSet=0). Skipping PasswordNeverExpires=TRUE to prevent conflict."
+                                $info = "PNE requested TRUE ($pneSource) was skipped due to destination safety check (pwdLastSet=0) for user: $sAMAccountName"
                                 Write-Host $warn -ForegroundColor Yellow
                                 Write-Log  $warn
+                                Write-Verbose $info
+                                Write-Log  $info
                             } elseif ($null -eq $cplEffective) {
                                 $warn = "Warning: Could not verify ChangePasswordAtLogon state for destination user '$sAMAccountName'. Skipping PasswordNeverExpires=TRUE (safe-by-default)."
+                                $info = "PNE requested TRUE ($pneSource) was skipped because destination pwdLastSet could not be verified for user: $sAMAccountName"
                                 Write-Host $warn -ForegroundColor Yellow
                                 Write-Log  $warn
+                                Write-Verbose $info
+                                Write-Log  $info
                             } else {
                                 try {
                                     Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                                    Write-Host "  => PasswordNeverExpires set to True for user: $sAMAccountName"
-                                    Write-Log  "PasswordNeverExpires set to True for user: sAMAccountName=$sAMAccountName"
+                                    Write-Host "  => PasswordNeverExpires set to True for user: $sAMAccountName ($pneSource)"
+                                    Write-Log  "PasswordNeverExpires set to True for user: sAMAccountName=$sAMAccountName source=$pneSource"
                                 } catch {
                                     Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
                                     Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
@@ -1154,8 +1228,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             # Dedicated column explicitly sets PasswordNeverExpires=FALSE
                             try {
                                 Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $false
-                                Write-Host "  => PasswordNeverExpires set to False for user: $sAMAccountName"
-                                Write-Log  "PasswordNeverExpires set to False for user: sAMAccountName=$sAMAccountName"
+                                Write-Host "  => PasswordNeverExpires set to False for user: $sAMAccountName ($pneSource)"
+                                Write-Log  "PasswordNeverExpires set to False for user: sAMAccountName=$sAMAccountName source=$pneSource"
                             } catch {
                                 Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
                                 Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"

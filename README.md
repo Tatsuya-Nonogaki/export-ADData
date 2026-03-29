@@ -154,9 +154,7 @@ Imports AD users, groups, and computers from CSV files, supporting domain migrat
 
 > \*Either `-DNPath` or `-DNPrefix` is required. They are mutually exclusive.
 
----
-
-##### Note about `-FixGroup` mode
+##### <ins>Note about `-FixGroup` mode</ins>
 
 `-FixGroup` enables a special post-import operation to set the `ManagedBy` property on groups, using the same GroupFile as in the import step. This is necessary because `ManagedBy` typically references user objects, which must already exist in the target AD. This mode does not create or remove any groups or users—it only updates the `ManagedBy` property for existing groups, mapping references according to the `-DNPath`, and advanced options (such as `-TrimOU`, `-NoDefaultContainer`, etc.).
 
@@ -178,7 +176,7 @@ Allows you to remove one or more OUs from the end (domain-root side) of the Dist
 ```
 This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OUs (nearest the domain root) of each DN path, if present.
 
-**Rules:**
+Rules:
 - Only plain OU names are allowed. Do not use `OU=` prefix, full DN fragments, or any other prefix.
 - Trimming only occurs if the source DN ends with the specified OU sequence (the right-most/nearest to domain root), and the match must be in exact order.
 - Trimming never removes `DC`, `CN`, or any components other than OUs.
@@ -200,8 +198,6 @@ This example trims `OU=sales` first, then `OU=deeper`, from the **rightmost** OU
 | OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| deeper,sales     | OU=foo,OU=bar,DC=domain,DC=local | Match (rightmost sequence), both OUs trimmed                      |
 | OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| bar,deeper       | [ unchanged ]                    | No match (rightmost OUs are "deeper,sales")                       |
 
----
-
 ##### -NoDefaultContainer and -NoForceDefaultContainer
 
 By default, users, groups, and computers that would otherwise be created directly under the domain root are placed in the domain's "Default" container (`CN=Users,DC=...` for users and groups, `CN=Computers` for computers).  
@@ -212,69 +208,99 @@ If you specify `-NoForceDefaultContainer`, objects are imported exactly as their
 
 This behavior also applies in cases where the resulting DN path ends up directly under the domain root, such as when all OUs are removed from an object's original DN by the `-TrimOU` option.
 
-**Precautions:**
+Precautions:
 - These parameters are **mutually exclusive**; you must specify only one or neither.
 - Placing users, groups, or computers directly under the domain root is valid but not recommended for most environments.
 - Use these options only if you are sure this is what you want.
 
 ---
 
-##### Password Handling and Account Enablement
+#### Password Handling and Account Enablement
 
 To set a password for users during import, add a `"Password"` column to your User CSV (this column is not present in the original export) and enter the desired password in plain text.
 
-**Password is required to `Enable` an account during import.**  
+<ins>Password is required to `Enable` an account during import.</ins>  
 If the password is absent for a user, the account will be created but remain disabled.
-
-##### Dedicated CSV columns for userAccountControl-related settings
-
-Some settings encoded in `userAccountControl` can also be controlled via dedicated per-property CSV columns. This is easier and less error-prone than recalculating the hexadecimal integer.
-
-**Common rules for all dedicated columns:**
-
-- Acceptable boolean values: `TRUE`, `YES`, or `1` (case-insensitive) to enable; `FALSE`, `NO`, or `0` to disable.
-- If a dedicated column is present and contains a valid boolean value, it takes **precedence** over the corresponding `userAccountControl` bit.
-- If the column is present but its value is non-blank and cannot be parsed as a boolean, the script logs a warning and **falls back** to the `userAccountControl` bit.
-- When the fallback applies, only a TRUE (bit set) result is explicitly applied; a FALSE (bit not set) result is left to the destination AD defaults/policies. To explicitly set a property to `FALSE`, use the dedicated column.
-
-**Currently supported dedicated columns:**
-
-| Column name              | Controls                                         | userAccountControl bit |
-|--------------------------|--------------------------------------------------|------------------------|
-| `PasswordNeverExpires`   | "Password never expires"                         | `0x10000`              |
-| `ChangePasswordAtLogon`  | "User must change password at next logon"        | `0x80000`              |
-
-##### Special rules for `ChangePasswordAtLogon`
-
-- **When set to a positive value** (`TRUE`, `YES`, or `1`): a password must also be provided in the `"Password"` column. If no password is present, the script warns and does not set the flag.
-- **When set to a negative value** (`FALSE`, `NO`, or `0`): the flag is cleared regardless of password state, as Active Directory does not prohibit this operation.
-
-**Summary Table:**
-
-| ChangePasswordAtLogon (column) | Password Set | Action                                                     |
-|--------------------------------|--------------|------------------------------------------------------------|
-| TRUE/YES/1                     | Yes          | Set-ADUser -ChangePasswordAtLogon $true                    |
-| FALSE/NO/0                     | Yes          | Set-ADUser -ChangePasswordAtLogon $false                   |
-| TRUE/YES/1                     | No           | Warn, do not set                                           |
-| FALSE/NO/0                     | No           | Set-ADUser -ChangePasswordAtLogon $false (this is allowed) |
-| blank/missing/invalid          | Yes          | userAccountControl bit `0x80000` → set flag if present     |
-| blank/missing/invalid          | No           | userAccountControl bit `0x80000` → warn, do not set        |
 
 ---
 
-##### ManagedBy Property: Mapping and Container Handling
+#### Dedicated CSV columns for userAccountControl-related settings
+
+Some settings encoded in `userAccountControl` can also be controlled via dedicated per-property CSV columns. This is easier and less error-prone than recalculating the hexadecimal integer.
+
+This script also applies a normalization/conflict-resolution policy among CCP/CPL/PNE to avoid contradictory combinations.
+
+**Currently recognized dedicated columns (CCP/CPL/PNE):**
+
+| Priority | Abbrev | Column name              | In export CSV by default?  | Fallback UAC bit      | Controls                                  | Notes                                                                            |
+|----------|--------|--------------------------|----------------------------|-----------------------|-------------------------------------------|----------------------------------------------------------------------------------|
+|    1     | CCP    | `CannotChangePassword`   | Yes                        | *`0x40` (never used)* | "User cannot change password"             | Applied only when CCP=TRUE is requested (best-effort). CCP=FALSE is intentionally not forced (destination ACLs/delegation defaults are respected). |
+|    2     | CPL    | `ChangePasswordAtLogon`  | No                         | `0x80000`             | "User must change password at next logon" | If CPL=TRUE, a password in the `Password` column is required to enforce it.      |
+|    3     | PNE    | `PasswordNeverExpires`   | Yes                        | `0x10000`             | "Password never expires"                  | When setting PNE=TRUE, the destination state (pwdLastSet) is checked for safety. |
+
+**Common rules for all dedicated columns above:**
+
+- Acceptable boolean values: `TRUE`, `YES`, or `1` (case-insensitive) to enable; `FALSE`, `NO`, or `0` to disable.
+- If a dedicated column is present and contains a valid boolean value, it takes precedence over the corresponding `userAccountControl` bit (when applicable).
+- If the column is present but its value is non-blank and cannot be parsed as a boolean, the script logs a warning and treats it as *unknown* for that column.
+
+**Fallback rules (when the dedicated column is missing, blank, or treated as unknown):**
+
+- For **CPL** and **PNE**, the script may fall back to the corresponding `userAccountControl` bit, but only introduces the **TRUE (bit set)** case.
+  - A FALSE (bit not set) outcome is left to the destination AD defaults/policies **unless the CSV explicitly sets the property to `FALSE` via the column**.
+- For **CCP**, the script does **not** fall back to `userAccountControl` bit `0x40` (CCP is ACL-based and the bit is not a reliable indicator in practice).
+
+##### <ins>Normalization / conflict-resolution policy (CCP > CPL > PNE)</ins>
+
+The following rules are used to resolve contradictory combinations:
+
+| Priority order | If requested TRUE (after parsing/fallback)                    | Result                    |
+|----------------|---------------------------------------------------------------|---------------------------|
+| CCP > CPL      | CCP=TRUE and CPL=TRUE                                         | CPL is skipped (CCP wins) |
+| CPL > PNE      | CPL=TRUE and PNE=TRUE                                         | PNE is skipped (CPL wins) |
+
+Notes:
+- Even when a TRUE value is determined (from a column or fallback), the normalization/conflict-resolution policy may skip applying it, resulting in an effective FALSE outcome.
+- CCP is the strongest key in this set. Changing CCP values may change how conflicts are resolved and can affect the final results of both CPL and PNE.
+
+##### <ins>Special rules for `ChangePasswordAtLogon` (CPL)</ins>
+
+- When set to a positive value (`TRUE`, `YES`, or `1`): a password must also be provided in the `Password` column. If no password is present, the script warns and does not set the flag.
+- When set to a negative value (`FALSE`, `NO`, or `0`): the flag is cleared regardless of password state, as Active Directory does not prohibit this operation.
+
+**Summary table (CPL specific):**
+
+| ChangePasswordAtLogon (column) | Password Set | Action                                                     |
+|--------------------------------|--------------|------------------------------------------------------------|
+| TRUE/YES/1                     | Yes          | `Set-ADUser -ChangePasswordAtLogon $true`                  |
+| FALSE/NO/0                     | Yes          | `Set-ADUser -ChangePasswordAtLogon $false`                 |
+| TRUE/YES/1                     | No           | Warn, do not set                                           |
+| FALSE/NO/0                     | No           | `Set-ADUser -ChangePasswordAtLogon $false` (this is allowed) |
+| blank/missing/invalid          | Yes          | `userAccountControl` bit `0x80000` → set flag if present   |
+| blank/missing/invalid          | No           | `userAccountControl` bit `0x80000` → warn, do not set      |
+
+##### <ins>Safety check before applying PNE=TRUE</ins>
+
+Before applying **`PasswordNeverExpires=TRUE`**, the script checks state (`pwdLastSet`) of the newly-created user to avoid introducing a conflict with an already-effective "must change password at next logon", because the configured ACLs/delegation on the destination AD may automatically put the account into an effective "must change password at next logon" state (pwdLastSet=0).
+
+- If `pwdLastSet=0` (CPL is effectively TRUE), `PasswordNeverExpires=TRUE` is skipped.
+- If the destination state cannot be verified, `PasswordNeverExpires=TRUE` is skipped (safe-by-default).
+
+---
+
+#### ManagedBy Property: Mapping and Container Handling
 
 When importing or registering the `ManagedBy` property, especially with advanced options or when targeting default containers, the destination OU or container for the referenced object may not match your expectations due to mapping rules and option interactions (such as `-TrimOU` or `-NoDefaultContainer`).  
 **A common issue** is that the Distinguished Name (DN) in the `ManagedBy` field of the source CSV may not correspond to the DN of any imported user or group in the target AD. For example, if a computer object is imported into `OU=sales,DC=domain,DC=local`, but its `ManagedBy` value in the source CSV is directly on the domain-root (DC=domain,DC=local). The registration will fail unless a user with that exact DN exists in the destination AD.  
 
-> 📝 **Note:** It is also impossible to register `ManagedBy` if it refers to a `Contact` object, which is currently out of scope for this script.
+> 📝 Note: It is also impossible to register `ManagedBy` if it refers to a `Contact` object, which is currently out of scope for this script.
 
 If you encounter unexpected placements or registration failures, review your DN mapping and advanced parameters.  
 You may need to adjust specific CSV records (for example, update the `ManagedBy` DN to match the actual imported user's DN), or hand register the `ManagedBy` property after import to achieve the intended outcome.
 
 ---
 
-##### GroupCategory and GroupScope handling in Group Imports
+#### GroupCategory and GroupScope handling in Group Imports
 
 These properties are normally sourced from the `groupType` column. However, recalculating the hexadecimal integer for `groupType` can be cumbersome when modifications are required.  
 To simplify this process, you may leave `groupType` blank or prefix its value with a hash ("#"). In these cases, the script will use the string columns `GroupCategory` and `GroupScope` instead.
@@ -301,7 +327,7 @@ To simplify this process, you may leave `groupType` blank or prefix its value wi
 .\import-ADData.ps1 -DNPath "DC=domain,DC=local" -UserFile "Users.csv" -NoForceDefaultContainer
 ```
 
-##### Registering ManagedBy for Groups after User/Group Import
+<ins>Registering ManagedBy for Groups after User/Group Import</ins>
 
 To set the `ManagedBy` property for groups after importing users and groups, run the following sequence. Be sure to use the same `-DNPath` and advanced options (such as `-TrimOU`, `-NoDefaultContainer`, etc.) for all runs to ensure DN mapping is consistent.
 
