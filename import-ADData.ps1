@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.5
+  Version: 1.0.6
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -40,26 +40,59 @@
   add a "Password" column, and put password in plain text. Do note that Password 
   is required to restore the "Enabled" flag of the account.
 
-  Note: Dedicated CSV columns for userAccountControl-related settings
-  Some settings encoded in userAccountControl can also be controlled via dedicated
-  per-property CSV columns. This is easier and less error-prone than recalculating
-  the hexadecimal integer. The following rules apply to all such dedicated columns:
-   - Acceptable boolean values: TRUE, YES, or 1 (case-insensitive) to enable;
-     FALSE, NO, or 0 to disable.
-   - If the dedicated column is present and contains a valid boolean value, it takes
-     precedence over the corresponding userAccountControl bit.
-   - If the column is present but its value is non-blank and cannot be parsed as a
-     boolean, the script logs a warning and falls back to the userAccountControl bit.
-   - When the fallback applies, only a TRUE (bit set) result is explicitly applied;
-     a FALSE (bit not set) result is left to the destination AD defaults/policies.
-     To explicitly set a property to FALSE, use the dedicated column.
+  Note: CSV columns related to userAccountControl / password policy (CCP/CPL/PNE)
 
-  Currently supported dedicated columns:
-   - "PasswordNeverExpires"  : controls the "Password never expires" flag (0x10000).
-   - "ChangePasswordAtLogon" : controls the "User must change password at next logon"
-     flag (0x80000). Note: setting this to a positive value requires a password in
-     the "Password" column. When set to a negative value, the flag is cleared
-     regardless of password state, as Active Directory does not prohibit this.
+  Some password-policy-related settings are normally encoded in the integer
+  "userAccountControl" bit field. To make imports safer and easier, this script
+  supports per-property CSV columns and applies a normalization policy to avoid
+  contradictory combinations.
+
+  Currently recognized columns:
+   - "CannotChangePassword" (CCP): Controls whether the user can change their password.
+     The column is included by default in the raw CSV produced by export-ADData.ps1.
+     This script applies CCP=TRUE to AD (best-effort) when requested. CCP=FALSE is not
+     actively forced and is left to the destination AD defaults/policies.
+   - "ChangePasswordAtLogon" (CPL): Controls "User must change password at next logon".
+     Add this column if needed.
+     When set to TRUE, a password in the "Password" column is required to enforce it.
+   - "PasswordNeverExpires" (PNE): Controls the "Password never expires" setting.
+     The column is included by default in the raw CSV produced by export-ADData.ps1.
+
+  Boolean parsing rules (applies to all columns listed above):
+   - Acceptable values: TRUE, YES, or 1 (case-insensitive) to enable;
+     FALSE, NO, or 0 to disable.
+   - If the column exists and contains a valid boolean value, it takes precedence
+     over the corresponding userAccountControl bit (when applicable).
+   - If the column exists but its value is non-blank and cannot be parsed as a
+     boolean, the script logs a warning and treats it as unknown for that column.
+
+  Fallback rules when the dedicated column is missing or invalid:
+   - For CPL and PNE, the script may fall back to userAccountControl bits, but only
+     explicitly applies the TRUE (bit set) case. The FALSE (bit not set) case is
+     left to the destination AD defaults/policies unless the CSV explicitly sets
+     the property to FALSE via the column.
+   - For CCP, the script does NOT fall back to userAccountControl bit 0x40, because
+     "CannotChangePassword" is ACL-based and the bit is not a reliable indicator.
+   - Note: even when a TRUE value is determined (from column or fallback), the
+     normalization or safety policy may still skip applying it, resulting in an
+     effective FALSE outcome.
+
+  IMPORTANT: The "CannotChangePassword" column must be present in the User CSV.
+   - This column is included by export-ADData.ps1 by default. Do not delete the column.
+   - You may edit its values if you intentionally want to change the CCP setting to be
+     imported to the destination AD. Note that CCP has the highest priority in the
+     normalization/conflict-resolution policy (CCP > CPL > PNE). Changing CCP may change
+     how conflicts are resolved and can affect the final results of both
+     ChangePasswordAtLogon and PasswordNeverExpires.
+
+  Normalization policy (priority order: CCP > CPL > PNE):
+   - If CCP=TRUE and CPL=TRUE are both requested, CPL is skipped (CCP wins).
+   - If CPL=TRUE and PNE=TRUE are both requested, PNE is skipped (CPL wins).
+
+  Safety check on the destination AD before applying PNE=TRUE:
+   - This script checks the destination account state (pwdLastSet) and skips
+     PasswordNeverExpires=TRUE if the account is effectively in "must change password
+     at next logon" state, or if that state cannot be verified.
 
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
@@ -788,6 +821,25 @@ Review your CSV. To override this check, use -NoClassCheck.)
         return $null
     }
 
+    # Check whether ChangePasswordAtLogon is effectively TRUE for an existing AD user.
+    # Returns $true when pwdLastSet is 0 (ChangePasswordAtLogon is effectively set).
+    # Returns $false when pwdLastSet is non-zero (ChangePasswordAtLogon is not set).
+    # Returns $null when the AD user cannot be retrieved or the property is unavailable.
+    function IsChangePasswordAtLogonEffective {
+        param(
+            [string]$SamAccountName
+        )
+        try {
+            $adUser = Get-ADUser -Identity $SamAccountName -Properties pwdLastSet -ErrorAction Stop
+            if ($null -eq $adUser) { return $null }
+            # pwdLastSet == 0 means ChangePasswordAtLogon is effectively TRUE
+            if ($adUser.pwdLastSet -eq 0) { return $true }
+            return $false
+        } catch {
+            return $null
+        }
+    }
+
     # Check CSV column name duplication
     function Assert-NoDuplicateCsvColumns {
         param(
@@ -980,105 +1032,208 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     # Set "userAccountControl" property related special control bits - Enabling account and set ChangePasswordAtLogon=True require a successfully set password
                     $userFlags = [int]$usr.userAccountControl
 
-                    # ChangePasswordAtLogon from dedicated column in the CSV or bits in userAccountControl - Column takes precedence
-                    $changePwdColExists = $usr.PSObject.Properties.Name -contains "ChangePasswordAtLogon"
-                    if ($changePwdColExists) {
-                        $changePwdRawValue  = $usr.ChangePasswordAtLogon
-                        $changePwdUserValue = To-Bool $changePwdRawValue
+                    # ----------------------------------------------------------------
+                    # CCP/CPL/PNE normalization block (policy order: CCP > CPL > PNE)
+                    # CCP = CannotChangePassword, CPL = ChangePasswordAtLogon,
+                    # PNE = PasswordNeverExpires
+                    # ----------------------------------------------------------------
+
+                    # --- CPL (ChangePasswordAtLogon): dedicated column or UAC bit 0x80000 fallback ---
+                    $cplColExists = $usr.PSObject.Properties.Name -contains "ChangePasswordAtLogon"
+                    if ($cplColExists) {
+                        $cplRawValue  = $usr.ChangePasswordAtLogon
+                        $cplWanted    = To-Bool $cplRawValue   # CPL: parsed boolean or $null when invalid/blank
                     } else {
-                        $changePwdRawValue = $changePwdUserValue = $null
+                        $cplRawValue = $cplWanted = $null
                     }
 
-                    # Warn when the dedicated column exists but has a non-blank invalid value (then fall back to userAccountControl logic).
-                    if ($changePwdColExists -and $changePwdRawValue -ne $null -and $changePwdRawValue.ToString().Trim() -ne "" -and $changePwdUserValue -eq $null) {
-                        $warn = "Warning: ChangePasswordAtLogon column value is not a valid boolean for user: $sAMAccountName (value='$changePwdRawValue'). Falling back to userAccountControl (0x80000)"
+                    # Warn when dedicated column exists but has a non-blank invalid value (fall back to UAC bit).
+                    if ($cplColExists -and $cplRawValue -ne $null -and $cplRawValue.ToString().Trim() -ne "" -and $cplWanted -eq $null) {
+                        $warn = "Warning: ChangePasswordAtLogon column value is not a valid boolean for user: $sAMAccountName (value='$cplRawValue'). Falling back to userAccountControl (0x80000)"
                         Write-Host $warn -ForegroundColor Yellow
                         Write-Log $warn
                     }
 
-                    if ($changePwdColExists -and $changePwdUserValue -ne $null) {
-                        # Dedicated column is present and has a parseable boolean value
-                        if ($changePwdUserValue -eq $true -and -not $IsPasswordSet) {
-                            Write-Host "Warning: Failed to set ChangePasswordAtLogon (column=TRUE) for account $sAMAccountName as no password is set" -ForegroundColor Yellow
-                            Write-Log "Failed to set ChangePasswordAtLogon (column=TRUE) for account $sAMAccountName as no password is set"
-                        } else {
-                            try {
-                                Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $changePwdUserValue
-                                Write-Host "  => ChangePasswordAtLogon set to $changePwdUserValue (dedicated column) for user: $sAMAccountName"
-                                Write-Log "ChangePasswordAtLogon set to $changePwdUserValue (dedicated column) for user: sAMAccountName=$sAMAccountName"
-                            } catch {
-                                Write-Error "Failed to set ChangePasswordAtLogon for user ${sAMAccountName}: $_"
-                                Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=${sAMAccountName}, ChangePasswordAtLogon='$changePwdRawValue' - $_"
+                    # Determine CPL source and apply fallback.
+                    $cplSource = "none"  # "column" | "userAccountControl" | "none"
+                    if ($cplColExists -and $null -ne $cplWanted) {
+                        $cplSource = "column"
+                    }
+                    # Fallback: UAC bit 0x80000; only applies TRUE (FALSE is left to AD defaults unless column says FALSE).
+                    if ((-not $cplColExists -or $cplWanted -eq $null) -and ($userFlags -band 0x80000)) {
+                        $cplWanted = $true
+                        $cplSource = "userAccountControl"
+                    }
+
+                    # --- CCP (CannotChangePassword): dedicated column only (no UAC fallback) ---
+                    $ccpColExists = $usr.PSObject.Properties.Name -contains "CannotChangePassword"
+                    $ccpKnown     = $false   # CCP = CannotChangePassword: whether ccpWanted is a valid known value
+                    $ccpMissing   = $false   # CCP: column is absent from the CSV
+                    $ccpInvalid   = $false   # CCP: column is present but blank or has an invalid value
+                    $ccpRawValue  = $null
+                    $ccpWanted    = $null    # CCP = CannotChangePassword: parsed boolean or $null when unknown
+
+                    if (-not $ccpColExists) {
+                        $ccpMissing = $true
+                    } else {
+                        $ccpRawValue = $usr.CannotChangePassword
+                        $ccpWanted   = To-Bool $ccpRawValue
+                        if ($ccpWanted -eq $null) {
+                            $ccpInvalid = $true
+                            # Warn only when a non-blank value failed to parse (blank is silently treated as unknown).
+                            if ($ccpRawValue -ne $null -and $ccpRawValue.ToString().Trim() -ne "") {
+                                $warn = "Warning: CannotChangePassword column value is not a valid boolean for user: $sAMAccountName (value='$ccpRawValue'). Treating as unknown."
+                                Write-Host $warn -ForegroundColor Yellow
+                                Write-Log  $warn
                             }
+                        } else {
+                            $ccpKnown = $true
                         }
                     }
-                    elseif ($IsPasswordSet -and ($userFlags -band 0x80000)) {
-                        # Fallback: userAccountControl bit
-                        try {
-                            Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $true
-                            Write-Host "  => ChangePasswordAtLogon set to True (userAccountControl) for user: $sAMAccountName"
-                            Write-Log "ChangePasswordAtLogon set to True (userAccountControl) for user: sAMAccountName=$sAMAccountName"
-                        } catch {
-                            Write-Error "Failed to set ChangePasswordAtLogon (userAccountControl) for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set ChangePasswordAtLogon (userAccountControl) for user: sAMAccountName=$sAMAccountName - $_"
-                        }
-                    }
-                    elseif (-not $IsPasswordSet -and ($userFlags -band 0x80000)) {
-                        # Bit is set, but password is not set
-                        Write-Host "Warning: Failed to set ChangePasswordAtLogon (userAccountControl) for account $sAMAccountName as no password is set" -ForegroundColor Yellow
-                        Write-Log "Failed to set ChangePasswordAtLogon (userAccountControl) for account $sAMAccountName as no password is set"
-                    }
+                    # NOTE: We intentionally do NOT use userAccountControl (0x40) as fallback for CCP.
+                    #       CCP is ACL-based; UAC bit is not a reliable indicator in practice.
 
-                    # CannotChangePassword
-                    if ($userFlags -band 0x40) {
-                        try {
-                            $acuser = Get-ADUser -Identity $sAMAccountName
-                            Set-ACL -Path "AD:\$($acuser.DistinguishedName)" -AclObject (Get-ACL -Path "AD:\$($acuser.DistinguishedName)" | ForEach-Object { $usr.Access | Where-Object { $usr.ObjectType -eq [Guid]::Parse("4c164200-20c0-11d0-a768-00aa006e0529") -and $usr.ActiveDirectoryRights -eq "ExtendedRight" -and $usr.AccessControlType -eq "Deny" } })
-                            Write-Host "  => CannotChangePassword applied: $sAMAccountName"
-                            Write-Log "CannotChangePassword applied: sAMAccountName=$sAMAccountName"
-                        } catch {
-                            Write-Error "Failed to process CannotChangePassword for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to process CannotChangePassword for user: sAMAccountName=$sAMAccountName - $_"
-                        }
-                    }
-
-                    # PasswordNeverExpires
-                    # Prefer dedicated CSV column "PasswordNeverExpires" when present and parseable,
-                    # otherwise fall back to userAccountControl bit (0x10000).
+                    # --- PNE (PasswordNeverExpires): dedicated column or UAC bit 0x10000 fallback ---
                     $pneColExists = $usr.PSObject.Properties.Name -contains "PasswordNeverExpires"
                     if ($pneColExists) {
                         $pneRawValue  = $usr.PasswordNeverExpires
-                        $pneValue     = To-Bool $pneRawValue
+                        $pneWanted    = To-Bool $pneRawValue   # PNE: parsed boolean or $null when invalid/blank
                     } else {
-                        $pneRawValue = $pneValue = $null
+                        $pneRawValue = $pneWanted = $null
                     }
 
-                    if ($pneColExists -and $pneRawValue -ne $null -and $pneRawValue.ToString().Trim() -ne "" -and $pneValue -eq $null) {
+                    # Warn when dedicated column exists but has a non-blank invalid value (fall back to UAC bit).
+                    if ($pneColExists -and $pneRawValue -ne $null -and $pneRawValue.ToString().Trim() -ne "" -and $pneWanted -eq $null) {
                         $warn = "Warning: PasswordNeverExpires column value is not a valid boolean for user: $sAMAccountName (value='$pneRawValue'). Falling back to userAccountControl (0x10000)"
                         Write-Host $warn -ForegroundColor Yellow
                         Write-Log $warn
                     }
 
-                    if ($pneColExists -and $pneValue -ne $null) {
-                        # Dedicated column is present and has a parseable boolean value
+                    # Determine PNE source and apply fallback.
+                    $pneSource = "none"  # "column" | "userAccountControl" | "none"
+                    if ($pneColExists -and $null -ne $pneWanted) {
+                        $pneSource = "column"
+                    }
+                    # Fallback: UAC bit 0x10000; only applies TRUE (FALSE is left to AD defaults unless column says FALSE).
+                    if ((-not $pneColExists -or $pneWanted -eq $null) -and ($userFlags -band 0x10000)) {
+                        $pneWanted = $true
+                        $pneSource = "userAccountControl"
+                    }
+
+                    # ----------------------------------------------------------------
+                    # Normalize by policy: CCP > CPL > PNE
+                    # ----------------------------------------------------------------
+
+                    # CCP=TRUE and CPL=TRUE conflict: skip CPL to prevent deadlock (only when CCP is known)
+                    if ($ccpKnown -and $ccpWanted -eq $true -and $cplWanted -eq $true) {
+                        $warn = "Warning: CannotChangePassword=TRUE and ChangePasswordAtLogon=TRUE conflict for user '$sAMAccountName'. Policy CCP > CPL: skipping ChangePasswordAtLogon."
+                        $info = "CPL requested TRUE ($cplSource) was skipped due to CCP conflict for user: $sAMAccountName"
+                        Write-Host $warn -ForegroundColor Yellow
+                        Write-Log  $warn
+                        Write-Verbose $info
+                        Write-Log  $info
+                        $cplWanted = $false
+                    }
+
+                    # CPL=TRUE and PNE=TRUE conflict: skip PNE
+                    if ($cplWanted -eq $true -and $pneWanted -eq $true) {
+                        $warn = "Warning: ChangePasswordAtLogon=TRUE and PasswordNeverExpires=TRUE conflict for user '$sAMAccountName'. Policy CPL > PNE: skipping PasswordNeverExpires."
+                        $info = "PNE requested TRUE ($pneSource) was skipped due to CPL conflict for user: $sAMAccountName"
+                        Write-Host $warn -ForegroundColor Yellow
+                        Write-Log  $warn
+                        Write-Verbose $info
+                        Write-Log  $info
+                        $pneWanted = $false
+                    }
+
+                    # ----------------------------------------------------------------
+                    # Apply CCP (CannotChangePassword): highest priority in CCP/CPL/PNE, best-effort.
+                    # Applied only when CCP=TRUE is requested, intentionally avoiding setting FALSE
+                    # so that destination ACLs/delegation defaults are respected.
+                    # ----------------------------------------------------------------
+                    if ($ccpWanted -eq $true) {
                         try {
-                            Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $pneValue
-                            Write-Host "  => PasswordNeverExpires set to $pneValue (dedicated column) for user: $sAMAccountName"
-                            Write-Log "PasswordNeverExpires set to $pneValue (dedicated column) for user: sAMAccountName=$sAMAccountName"
+                            Set-ADUser -Identity $sAMAccountName -CannotChangePassword $true
+                            Write-Host "  => CannotChangePassword set to True for user: $sAMAccountName (column)"
+                            Write-Log  "CannotChangePassword set to True for user: sAMAccountName=$sAMAccountName source=column"
                         } catch {
-                            Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
+                            $warn = "Warning: Failed to set CannotChangePassword=TRUE for user '$sAMAccountName'. Continuing. Error: $_"
+                            Write-Host $warn -ForegroundColor Yellow
+                            Write-Log  $warn
                         }
                     }
-                    elseif ($userFlags -band 0x10000) {
-                        # Fallback: userAccountControl bit
-                        try {
-                            Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
-                            Write-Host "  => PasswordNeverExpires set to True (userAccountControl) for user: $sAMAccountName"
-                            Write-Log "PasswordNeverExpires set to True (userAccountControl) for user: sAMAccountName=$sAMAccountName"
-                        } catch {
-                            Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
-                            Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=$sAMAccountName - $_"
+
+                    # ----------------------------------------------------------------
+                    # Apply CPL (ChangePasswordAtLogon)
+                    # ----------------------------------------------------------------
+                    if ($cplWanted -ne $null) {
+                        # When applying CPL=TRUE but CCP status is unknown, warn that deadlock check was skipped.
+                        if ($cplWanted -eq $true -and -not $ccpKnown) {
+                            if ($ccpMissing) {
+                                $warn = "Warning: CannotChangePassword column is missing for user '$sAMAccountName'. ChangePasswordAtLogon=TRUE will be applied as requested (deadlock check skipped)."
+                            } else {
+                                $warn = "Warning: CannotChangePassword column is blank/invalid for user '$sAMAccountName'. ChangePasswordAtLogon=TRUE will be applied as requested (deadlock check skipped)."
+                            }
+                            Write-Host $warn -ForegroundColor Yellow
+                            Write-Log  $warn
+                        }
+
+                        if ($cplWanted -eq $true -and -not $IsPasswordSet) {
+                            Write-Host "Warning: Failed to set ChangePasswordAtLogon (wanted=TRUE) for account $sAMAccountName as no password is set" -ForegroundColor Yellow
+                            Write-Log  "Failed to set ChangePasswordAtLogon (wanted=TRUE) for account $sAMAccountName as no password is set"
+                        } else {
+                            try {
+                                Set-ADUser -Identity $sAMAccountName -ChangePasswordAtLogon $cplWanted
+                                Write-Host "  => ChangePasswordAtLogon set to $cplWanted for user: $sAMAccountName ($cplSource)"
+                                Write-Log  "ChangePasswordAtLogon set to $cplWanted for user: sAMAccountName=$sAMAccountName source=$cplSource"
+                            } catch {
+                                Write-Error "Failed to set ChangePasswordAtLogon for user ${sAMAccountName}: $_"
+                                Write-Log "Failed to set ChangePasswordAtLogon for user: sAMAccountName=${sAMAccountName}, ChangePasswordAtLogon='$cplRawValue' - $_"
+                            }
+                        }
+                    }
+
+                    # ----------------------------------------------------------------
+                    # Apply PNE (PasswordNeverExpires) with destination-state safety check before applying TRUE
+                    # ----------------------------------------------------------------
+                    if ($pneWanted -ne $null) {
+                        if ($pneWanted -eq $true) {
+                            # Safety check: verify destination user does not have ChangePasswordAtLogon effectively TRUE.
+                            $cplEffective = IsChangePasswordAtLogonEffective -SamAccountName $sAMAccountName
+                            if ($cplEffective -eq $true) {
+                                $warn = "Warning: Destination user '$sAMAccountName' has ChangePasswordAtLogon effectively TRUE (pwdLastSet=0). Skipping PasswordNeverExpires=TRUE to prevent conflict."
+                                $info = "PNE requested TRUE ($pneSource) was skipped due to destination safety check (pwdLastSet=0) for user: $sAMAccountName"
+                                Write-Host $warn -ForegroundColor Yellow
+                                Write-Log  $warn
+                                Write-Verbose $info
+                                Write-Log  $info
+                            } elseif ($null -eq $cplEffective) {
+                                $warn = "Warning: Could not verify ChangePasswordAtLogon state for destination user '$sAMAccountName'. Skipping PasswordNeverExpires=TRUE (safe-by-default)."
+                                $info = "PNE requested TRUE ($pneSource) was skipped because destination pwdLastSet could not be verified for user: $sAMAccountName"
+                                Write-Host $warn -ForegroundColor Yellow
+                                Write-Log  $warn
+                                Write-Verbose $info
+                                Write-Log  $info
+                            } else {
+                                try {
+                                    Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $true
+                                    Write-Host "  => PasswordNeverExpires set to True for user: $sAMAccountName ($pneSource)"
+                                    Write-Log  "PasswordNeverExpires set to True for user: sAMAccountName=$sAMAccountName source=$pneSource"
+                                } catch {
+                                    Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
+                                    Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
+                                }
+                            }
+                        } else {
+                            # Dedicated column explicitly sets PasswordNeverExpires=FALSE
+                            try {
+                                Set-ADUser -Identity $sAMAccountName -PasswordNeverExpires $false
+                                Write-Host "  => PasswordNeverExpires set to False for user: $sAMAccountName ($pneSource)"
+                                Write-Log  "PasswordNeverExpires set to False for user: sAMAccountName=$sAMAccountName source=$pneSource"
+                            } catch {
+                                Write-Error "Failed to set PasswordNeverExpires for user ${sAMAccountName}: $_"
+                                Write-Log "Failed to set PasswordNeverExpires for user: sAMAccountName=${sAMAccountName}, PasswordNeverExpires='$pneRawValue' - $_"
+                            }
                         }
                     }
 

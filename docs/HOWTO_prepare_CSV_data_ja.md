@@ -36,19 +36,30 @@
      📝 **注:** DisplayName, HomePage, ObjectCategory, CN など一部の列は現状 `import-ADData.ps1` では使用されませんが、作業中に参考にしたり将来の活用に備えて、保持しておくことをお勧めします。
   
    - ユーザーデータ：  
-     `MemberOf,Manager,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
+     `MemberOf,Manager,CannotChangePassword,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
 
      📝 **注:**
      - CanonicalName, CN, codePage, HomePage, Initials, Organization, PrimaryGroup, sAMAccountType など一部の列は現状 `import-ADData.ps1` では使用されませんが、作業中に参考にしたり将来の活用に備えて、保持しておくことをお勧めします。
 
-     - 任意のユーザーにパスワードを登録したい場合は`"Password"`列を追加してください（詳細はREADMEや import-ADData.ps1 のヘルプ参照）。この列は、空欄の場合には `import-ADData.ps1` は無視するので、追加しても害はありません。詳しくはREADMEや`import-ADData.ps1`のヘルプを参照してください。
+     - 任意のユーザーにパスワードを登録したい場合は`"Password"`列を追加してください。この列は、空欄の場合には `import-ADData.ps1` によって無視されるので、追加しても害はありません。詳しくは [README](../README.md) や`import-ADData.ps1`のヘルプを参照してください。
 
-     - **`userAccountControl`関連の専用カラムについて:**  
-       `userAccountControl` に格納されている属性のうちいくつかは、CSVの専用列によって設定することも可能です。これにより、 `userAccountControl`の16進数の値を再計算するという面倒でミスをはらむ作業を避けられます。  
-       それらの列の有効な値は、有効化するなら `TRUE`/`YES`/`1`、無効化なら `FALSE`/`NO`/`0` です。 専用カラム（列が存在し空でない時）は、呼応する `userAccountControl` ビットより優先されます。カラムの値が空でないにもかかわらず真偽値として解釈不能な値だった場合には、スクリプトは警告メッセージを出してビット値にフォールバックします。 なお、ビット値にフォールバックした場合、TRUE（つまりビットが立っている）の時だけユーザに反映されます。FALSE（ビットが立っていない）場合は明示的な反映は行われず、インポート先ADの既定値やポリシーに委ねられるという点に注意してください。  
-       現在のところ、こうした専用カラムには以下のものがあります:
-       - `"PasswordNeverExpires"` — "Password never expires" フラグを制御
-       - `"ChangePasswordAtLogon"` — 次回ログオン時にパスワードの再設定を強制するかどうかを制御。ただし、当属性を真にするには、`"Password"`列も入力されている必要があります。詳しくは、README や `import-ADData.ps1` のヘルプを参照してください。
+     - **`userAccountControl`関連の専用カラムについて (CCP/CPL/PNE):**  
+       通常は `userAccountControl` にビットとして格納されている属性のうち、いくつかは、CSVの専用列によって設定することも可能です。これにより、`userAccountControl`のビット値を再計算するという面倒でミスをはらむ作業を避けられます。
+
+       - 認識される専用カラムには以下のものがあります:  
+         - `"CannotChangePassword"` (CCP): `export-ADData.ps1`の出力に既定で存在
+         - `"ChangePasswordAtLogon"` (CPL): 使用する場合は要追加
+         - `"PasswordNeverExpires"` (PNE): `export-ADData.ps1`の出力に既定で存在
+       - 設定可能な値: 有効化なら `TRUE`, `YES`, `1` のいずれか (大文字小文字区別なし)、無効化なら `FALSE`, `NO`, `0`。
+       - カラムが存在し真偽値として解釈できた場合は、対応する `userAccountControl` のビット値よりも優先されます (ただし例外あり)。
+       - フォールバックの挙動:
+         - CPL/PNE は、専用カラム値が採用できない場合、対応する `userAccountControl` ビットへファールバックします。ただし、**TRUE (ビットが立っている)** の場合に限られます。
+         - CCP は `userAccountControl` の `0x40` ビットへのフォールバックはしません。
+       - CCP は CCP=TRUE の場合のみ反映 (インポート先ADのACLとの兼ね合いでベストエフォートとなる)。CCP=FALSE は、インポート先ADのACLや委任設定によって割り当てられる既定値を尊重するため、敢えて反映しないようにしています。
+       - これら3つ (CCP/CPL/PNE) は互いに矛盾・衝突し得る関係にあります。例えば、`ChangePasswordAtLogon` は「今すぐにパスワードを変更せよ」である一方、`CannotChangePassword` はパスワードの変更を禁止しており、同時に設定するわけには行きません。そのため `import-ADData.ps1` は、あってはならない組み合わせにならないよう、コンフリクト回避評価を行います。  
+         コンフリクト回避評価での優先順位: **CCP > CPL > PNE**
+
+       詳しくは、当レポジトリの [README](../README.md) や `import-ADData.ps1` のヘルプを参照してください。これらの値の普遍化、衝突回避ポリシー、PNE 設定時の安全対策などについても述べられています。
 
    不要な列を削除するには、いくつか方法があります:  
 
