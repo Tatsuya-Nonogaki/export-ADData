@@ -48,12 +48,15 @@
   contradictory combinations.
 
   Currently recognized columns:
-   - "CannotChangePassword"  : CCP. Controls whether the user can change password.
+   - "CannotChangePassword" (CCP): Controls whether the user can change their password.
+     The column is included by default in the raw CSV produced by export-ADData.ps1.
      This script applies CCP=TRUE to AD (best-effort) when requested. CCP=FALSE is not
      actively forced and is left to the destination AD defaults/policies.
-   - "ChangePasswordAtLogon" : CPL. Controls "User must change password at next logon".
+   - "ChangePasswordAtLogon" (CPL): Controls "User must change password at next logon".
+     Add this column if needed.
      When set to TRUE, a password in the "Password" column is required to enforce it.
-   - "PasswordNeverExpires"  : PNE. Controls the "Password never expires" setting.
+   - "PasswordNeverExpires" (PNE): Controls the "Password never expires" setting.
+     The column is included by default in the raw CSV produced by export-ADData.ps1.
 
   Boolean parsing rules (applies to all columns listed above):
    - Acceptable values: TRUE, YES, or 1 (case-insensitive) to enable;
@@ -75,8 +78,7 @@
      effective FALSE outcome.
 
   IMPORTANT: The "CannotChangePassword" column must be present in the User CSV.
-   - This column is included by default in the raw CSV produced by export-ADData.ps1.
-     Do not delete this column.
+   - This column is included by export-ADData.ps1 by default. Do not delete the column.
    - You may edit its values if you intentionally want to change the CCP setting to be
      imported to the destination AD. Note that CCP has the highest priority in the
      normalization/conflict-resolution policy (CCP > CPL > PNE). Changing CCP may change
