@@ -47,7 +47,10 @@
        - **Dedicated columns for `userAccountControl`-related settings (CCP/CPL/PNE):**  
          Some password-policy-related settings are normally encoded in `userAccountControl`, but `import-ADData.ps1` supports dedicated per-property columns for safer editing and import.
 
-         - Recognized columns: `"CannotChangePassword"` (CCP), `"ChangePasswordAtLogon"` (CPL), `"PasswordNeverExpires"` (PNE)
+         - Recognized columns:  
+           - `"CannotChangePassword"` (CCP): included by `export-ADData.ps1` by default
+           - `"ChangePasswordAtLogon"` (CPL): add this column if needed
+           - `"PasswordNeverExpires"` (PNE): included by `export-ADData.ps1` by default
          - Acceptable boolean values: `TRUE`, `YES`, or `1` (case-insensitive) to enable; `FALSE`, `NO`, or `0` to disable.
          - If a column exists and contains a valid boolean value, it takes precedence over the corresponding `userAccountControl` bit (when applicable).
          - Fallback behavior:
