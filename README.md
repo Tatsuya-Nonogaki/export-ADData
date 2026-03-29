@@ -232,11 +232,11 @@ This script also applies a normalization/conflict-resolution policy among CCP/CP
 
 **Currently recognized dedicated columns (CCP/CPL/PNE):**
 
-| Priority | Abbrev | Column name              | Fallback UAC bit      | Controls                                         | Notes                                                                                         |
-|----------|--------|--------------------------|-----------------------|--------------------------------------------------|----------------------------------------------------------------------------------------------|
-|    1     | CCP    | `CannotChangePassword`   | *`0x40` (never used)* | "User cannot change password"                    | Applied only when CCP=TRUE is requested (best-effort). CCP=FALSE is intentionally not forced (destination ACLs/delegation defaults are respected). |
-|    2     | CPL    | `ChangePasswordAtLogon`  | `0x80000`             | "User must change password at next logon"        | If CPL=TRUE, a password in the `Password` column is required to enforce it.                   |
-|    3     | PNE    | `PasswordNeverExpires`   | `0x10000`             | "Password never expires"                         | When setting PNE=TRUE, the destination state (pwdLastSet) is checked for safety.             |
+| Priority | Abbrev | Column name              | In export CSV by default?  | Fallback UAC bit      | Controls                                  | Notes                                                                            |
+|----------|--------|--------------------------|----------------------------|-----------------------|-------------------------------------------|----------------------------------------------------------------------------------|
+|    1     | CCP    | `CannotChangePassword`   | Yes                        | *`0x40` (never used)* | "User cannot change password"             | Applied only when CCP=TRUE is requested (best-effort). CCP=FALSE is intentionally not forced (destination ACLs/delegation defaults are respected). |
+|    2     | CPL    | `ChangePasswordAtLogon`  | No                         | `0x80000`             | "User must change password at next logon" | If CPL=TRUE, a password in the `Password` column is required to enforce it.      |
+|    3     | PNE    | `PasswordNeverExpires`   | Yes                        | `0x10000`             | "Password never expires"                  | When setting PNE=TRUE, the destination state (pwdLastSet) is checked for safety. |
 
 **Common rules for all dedicated columns above:**
 
