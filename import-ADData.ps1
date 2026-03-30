@@ -97,6 +97,10 @@
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
 
+ .PARAMETER GroupFile
+  (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
+  dialog prompts you.
+
   Note: GroupCategory and GroupScope handling in Group Imports
   GroupCategory and GroupScope are normally determined from the "groupType" column exported
   from the source AD.
@@ -110,10 +114,6 @@
   If a dedicated column contains a non-blank invalid value (or if "groupType" is blank/invalid
   and the dedicated columns do not fully specify both properties), the script skips creating
   that group.
-
- .PARAMETER GroupFile
-  (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
-  dialog prompts you.
 
  .PARAMETER Computer
   (Alias -c) Operates in computer import mode. Can be omitted if -ComputerFile is specified.
