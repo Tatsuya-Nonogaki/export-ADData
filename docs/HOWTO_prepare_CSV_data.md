@@ -33,7 +33,18 @@
 
        `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
 
-       📝 **Note:** Some columns such as `DisplayName`, `HomePage`, `ObjectCategory`, `CN` are not currently used by `import-ADData.ps1`. However, they can still be useful for reference during your work, or for future extensions.
+       📝 **Note:**
+       - Some columns such as `DisplayName`, `HomePage`, `ObjectCategory`, `CN` are not currently used by `import-ADData.ps1`. However, they can still be useful for reference during your work, or for future extensions.
+       - **GroupCategory / GroupScope override:**  
+         If you need to change a group's category or scope, prefer editing the dedicated columns `GroupCategory` and `GroupScope` rather than recalculating the `groupType` integer, even though `groupType` is originally the primary data source.
+
+         - `GroupCategory`: `"Security"` or `"Distribution"`
+         - `GroupScope`: `"Global"`, `"DomainLocal"`, or `"Universal"`
+
+         Dedicated columns are evaluated first (per-property). If a dedicated value is present but non-blank and invalid, the group will be skipped during import.
+         - In general, it is recommended not to modify `groupType` unless you know exactly what you are doing. Use the dedicated columns for safe edits.
+
+         For full details, see the repository [README](../README.md) and `import-ADData.ps1` help.
 
      - For Users:  
 
