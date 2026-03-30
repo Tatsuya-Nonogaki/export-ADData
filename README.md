@@ -167,7 +167,7 @@ Imports AD users, groups, and computers from CSV files, supporting domain migrat
 
 #### Advanced Options
 
-##### -TrimOU
+##### -TrimOU — 🌐 General
 
 Allows you to remove one or more OUs from the end (domain-root side) of the DistinguishedName of objects to be imported. The argument must be a comma-separated list of OU names (without the `OU=` prefix).
 
@@ -198,7 +198,7 @@ Rules:
 | OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| deeper,sales     | OU=foo,OU=bar,DC=domain,DC=local | Match (rightmost sequence), both OUs trimmed                      |
 | OU=foo,OU=bar,OU=deeper,OU=sales,DC=domain,DC=local| bar,deeper       | [ unchanged ]                    | No match (rightmost OUs are "deeper,sales")                       |
 
-##### -NoDefaultContainer and -NoForceDefaultContainer
+##### -NoDefaultContainer and -NoForceDefaultContainer — 🌐 General
 
 By default, users, groups, and computers that would otherwise be created directly under the domain root are placed in the domain's "Default" container (`CN=Users,DC=...` for users and groups, `CN=Computers` for computers).  
 If you specify `-NoDefaultContainer`, such objects are instead created directly under the domain root (`DC=...`).  
@@ -215,7 +215,7 @@ Precautions:
 
 ---
 
-#### Password Handling and Account Enablement
+#### Password Handling and Account Enablement — 👤 User Import
 
 To set a password for users during import, add a `"Password"` column to your User CSV (this column is not present in the original export) and enter the desired password in plain text.
 
@@ -224,7 +224,7 @@ If the password is absent for a user, the account will be created but remain dis
 
 ---
 
-#### Dedicated CSV columns for userAccountControl-related settings
+#### Dedicated CSV columns for userAccountControl-related settings — 👤 User Import
 
 Some settings encoded in `userAccountControl` can also be controlled via dedicated per-property CSV columns. This is easier and less error-prone than recalculating the hexadecimal integer.
 
@@ -288,7 +288,7 @@ Before applying **`PasswordNeverExpires=TRUE`**, the script checks state (`pwdLa
 
 ---
 
-#### ManagedBy Property: Mapping and Container Handling
+#### ManagedBy Property: Mapping and Container Handling — 👥 Group Import
 
 When importing or registering the `ManagedBy` property, especially with advanced options or when targeting default containers, the destination OU or container for the referenced object may not match your expectations due to mapping rules and option interactions (such as `-TrimOU` or `-NoDefaultContainer`).  
 **A common issue** is that the Distinguished Name (DN) in the `ManagedBy` field of the source CSV may not correspond to the DN of any imported user or group in the target AD. For example, if a computer object is imported into `OU=sales,DC=domain,DC=local`, but its `ManagedBy` value in the source CSV is directly on the domain-root (DC=domain,DC=local). The registration will fail unless a user with that exact DN exists in the destination AD.  
@@ -300,10 +300,28 @@ You may need to adjust specific CSV records (for example, update the `ManagedBy`
 
 ---
 
-#### GroupCategory and GroupScope handling in Group Imports
+#### GroupCategory and GroupScope handling in Group Imports — 👥 Group Import
 
-These properties are normally sourced from the `groupType` column. However, recalculating the hexadecimal integer for `groupType` can be cumbersome when modifications are required.  
-To simplify this process, you may leave `groupType` blank or prefix its value with a hash ("#"). In these cases, the script will use the string columns `GroupCategory` and `GroupScope` instead.
+`GroupCategory` and `GroupScope` are normally determined from the `groupType` column (exported from the source Active Directory and treated as the primary/trusted value).
+
+If you need to override these properties, you can use the dedicated string columns without recalculating the `groupType` bits. Valid inputs are:
+
+- `GroupCategory`: `"Security"` or `"Distribution"`
+- `GroupScope`: `"Global"`, `"DomainLocal"`, or `"Universal"`
+
+**Evaluation rules (dedicated columns first):**
+
+| Input columns in Group CSV | How the script decides |
+|-----------------------------------------------|-------------------------------------------------------------|
+| Dedicated column is **present and valid**     | Use the dedicated value for that property                   |
+| Dedicated column is **missing or blank**      | Fall back to `groupType` bits for that property             |
+| Dedicated column is **non-blank but invalid** | Treat as user intent/error and **skip creating that group** |
+| `groupType` is **blank/invalid** and dedicated columns do not fully specify both properties | **Skip creating that group** |
+
+Notes:
+- Dedicated columns are evaluated **per-property** (you can override only `GroupScope`, only `GroupCategory`, or both).
+- The legacy convention of blanking or prefixing `groupType` with `#` is **no longer supported** as a switch. `groupType` is expected to be a valid integer when present. In general, you should not modify `groupType`; if you need to override category/scope, use the dedicated columns instead.
+- The import log includes which source was used, e.g. `GroupCategory=Security (column)` / `GroupScope=Global (groupType)`.
 
 ---
 
