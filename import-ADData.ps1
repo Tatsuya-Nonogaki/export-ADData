@@ -98,11 +98,18 @@
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
 
   Note: GroupCategory and GroupScope handling in Group Imports
-  These properties are normally sourced from the "groupType" column. However, recalculating 
-  the hexadecimal integer for "groupType" can be cumbersome when modifications are required.
-  To simplify this process, you may leave "groupType" blank or prefix its value with a 
-  hash ("#"). In these cases, the script will use the string columns "GroupCategory" and 
-  "GroupScope" instead.
+  GroupCategory and GroupScope are normally determined from the "groupType" column exported
+  from the source AD.
+  If you need to override these properties without recalculating "groupType", you can use
+  the dedicated string columns "GroupCategory" and "GroupScope" instead.
+    - GroupCategory: "Security" or "Distribution"
+    - GroupScope   : "Global", "DomainLocal", or "Universal"
+
+  Dedicated columns are evaluated first (per-property). If a dedicated column is missing or
+  blank, the script falls back to the "groupType" bits for that property.
+  If a dedicated column contains a non-blank invalid value (or if "groupType" is blank/invalid
+  and the dedicated columns do not fully specify both properties), the script skips creating
+  that group.
 
  .PARAMETER GroupFile
   (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
