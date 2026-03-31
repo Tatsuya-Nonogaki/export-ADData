@@ -1399,7 +1399,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             }
                             else {
                                 $catInvalidNonBlank = $true
-                                $msg = "Failed to create group '$sAMAccountName': invalid GroupCategory (column) value '$catStr'. Expected: Security or Distribution."
+                                $msg = "Failed to create group '$sAMAccountName': GroupCategory (column) has invalid value '$catStr'. Expected: Security or Distribution."
                                 Write-Host $msg -ForegroundColor Red
                                 Write-Log  $msg
                             }
@@ -1425,7 +1425,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             }
                             else {
                                 $scInvalidNonBlank = $true
-                                $msg = "Failed to create group '$sAMAccountName': invalid GroupScope (column) value '$scStr'. Expected: Global, DomainLocal, or Universal."
+                                $msg = "Failed to create group '$sAMAccountName': GroupScope (column) has invalid value '$scStr'. Expected: Global, DomainLocal, or Universal."
                                 Write-Host $msg -ForegroundColor Red
                                 Write-Log  $msg
                             }
@@ -1442,6 +1442,12 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     $needScopeFromGroupType    = (-not $groupScopeFinal)
 
                     if ($needCategoryFromGroupType -or $needScopeFromGroupType) {
+                        # Build a list of missing properties for diagnostics
+                        $missingFromDedicated = @()
+                        if ($needCategoryFromGroupType) { $missingFromDedicated += "GroupCategory" }
+                        if ($needScopeFromGroupType)    { $missingFromDedicated += "GroupScope" }
+                        $missingStr = ($missingFromDedicated -join ",")
+
                         $groupTypeRaw = $grp.groupType
                         $groupTypeInt = 0
 
@@ -1450,13 +1456,13 @@ Review your CSV. To override this check, use -NoClassCheck.)
                             # Parse groupType in one call: .NET TryParse writes the parsed int into $groupTypeInt (via [ref]) and returns $true/$false (no exceptions thrown).
                             $parsed = [int]::TryParse($gtStr, [ref]$groupTypeInt)
                             if (-not $parsed) {
-                                $msg = "Failed to create group '$sAMAccountName': groupType is not a valid integer (value='$gtStr')."
+                                $msg = "Failed to create group '$sAMAccountName': Dedicated columns were not fully specified ($missingStr) and groupType is not a valid integer (groupType='$gtStr')"
                                 Write-Host $msg -ForegroundColor Red
                                 Write-Log  $msg
                                 continue
                             }
                         } else {
-                            $msg = "Failed to create group '$sAMAccountName': groupType is blank and dedicated columns did not fully specify GroupCategory/GroupScope."
+                            $msg = "Failed to create group '$sAMAccountName': Dedicated columns were not fully specified ($missingStr) and groupType is blank."
                             Write-Host $msg -ForegroundColor Red
                             Write-Log  $msg
                             continue
