@@ -53,7 +53,7 @@
      📝 **Note:**
      - Some columns such as `CanonicalName`, `CN`, `codePage`, `HomePage`, `Initials`, `Organization`, `PrimaryGroup`, `sAMAccountType` are not currently used by `import-ADData.ps1`. But it is recommended to keep them for reference or future utilization.
 
-     - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row's `Password` field is empty, `import-ADData.ps1` simply ignores it.
+     - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row’s `Password` field is empty, `import-ADData.ps1` simply ignores it.
 
      - **Dedicated columns for `userAccountControl`-related settings (CCP/CPL/PNE):**  
        Some password-policy-related settings are normally encoded in `userAccountControl`, but `import-ADData.ps1` supports dedicated per-property columns for safer editing and import.
@@ -71,8 +71,9 @@
        - These three settings (CCP/CPL/PNE) can contradict each other, so `import-ADData.ps1` evaluates them with a conflict-resolution policy to avoid unsafe combinations (e.g., `ChangePasswordAtLogon` requests an immediate password change, while `CannotChangePassword` denies password changes—both cannot be effective at the same time).  
          Conflict-resolution priority: **CCP > CPL > PNE** (contradictory TRUE combinations may be skipped).
 
-       For full details (including the normalization and conflict-resolution policies, plus the PNE safety check), see the repository [README](../README.md) and `import-ADData.ps1` help.
-   You can remove columns in either of the following ways:
+       For full details (including the normalization and conflict-resolution policies, plus the PNE safety check), see the repository [README](../README.md) and `import-ADData.ps1` help.  
+
+   You can remove columns in either of the following ways:  
 
    - **Manual method (Excel)**  
      Load the CSV into Excel (e.g., save as `Users_domain_local-nosys.xlsx` or `Groups_domain_local-nosys.xlsx`), then manually delete columns that you do not need for import.
