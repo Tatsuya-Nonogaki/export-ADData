@@ -53,7 +53,7 @@
      📝 **Note:**
      - Some columns such as `CanonicalName`, `CN`, `codePage`, `HomePage`, `Initials`, `Organization`, `PrimaryGroup`, `sAMAccountType` are not currently used by `import-ADData.ps1`. But it is recommended to keep them for reference or future utilization.
 
-     - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row’s `Password` field is empty, `import-ADData.ps1` simply ignores it.
+     - If you want to assign passwords to selected users, add a `"Password"` column. (See the repository README and `import-ADData.ps1` help for details.) This column is safe to add: if a row's `Password` field is empty, `import-ADData.ps1` simply ignores it.
 
      - **Dedicated columns for `userAccountControl`-related settings (CCP/CPL/PNE):**  
        Some password-policy-related settings are normally encoded in `userAccountControl`, but `import-ADData.ps1` supports dedicated per-property columns for safer editing and import.
@@ -92,7 +92,7 @@
      .\filter-csv-columns.ps1 -InFile .\Users_domain_local-nosys.csv -OutFile .\Users_domain_local-slim.csv -ColumnFile .\column_list-Users.csv
      ```
 
-     That’s all. Just review the output files briefly to confirm the columns look as expected.  
+     That's all. Just review the output files briefly to confirm the columns look as expected.  
      For more details, see the help and comments of [filter-csv-columns.ps1](../utils/filter-csv-columns/filter-csv-columns.ps1).
 
    - **Bulk column removal with an Excel macro (DeleteExtraColumns.bas)**  
