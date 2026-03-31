@@ -226,7 +226,7 @@ If the password is absent for a user, the account will be created but remain dis
 
 #### Dedicated CSV columns for userAccountControl-related settings — 👤 User Import
 
-Some settings encoded in `userAccountControl` can also be controlled via dedicated per-property CSV columns. This is easier and less error-prone than recalculating the hexadecimal integer.
+Some settings encoded in `userAccountControl` can also be controlled via dedicated per-property CSV columns. This is easier and less error-prone than recalculating the bitmask integer (combined flags).
 
 This script also applies a normalization/conflict-resolution policy among CCP/CPL/PNE to avoid contradictory combinations.
 
