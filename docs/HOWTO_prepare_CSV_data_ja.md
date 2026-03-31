@@ -33,9 +33,21 @@
   
      `MemberOf,CN,Description,DisplayName,DistinguishedName,GroupCategory,GroupScope,groupType,HomePage,isCriticalSystemObject,ManagedBy,Name,ObjectCategory,ObjectClass,SamAccountName`  
   
-     📝 **注:** DisplayName, HomePage, ObjectCategory, CN など一部の列は現状 `import-ADData.ps1` では使用されませんが、作業中に参考にしたり将来の活用に備えて、保持しておくことをお勧めします。
+     📝 **注:**
+     - DisplayName, HomePage, ObjectCategory, CN など一部の列は現状 `import-ADData.ps1` では使用されませんが、作業中に参考にしたり将来の活用に備えて、保持しておくことをお勧めします。
+     - **GroupCategory と GroupScope のオーバーライド:**  
+       グループの category や scope を変更する必要がある場合は、専用の独立カラムである `GroupCategory` と `GroupScope` を触るようにしてください。本来それらの属性の元となるカラムは `groupType` ですが、 ビット数値である `groupType` を再計算するよりも確実です。
+
+       - `GroupCategory`: `"Security"` または `"Distribution"`
+       - `GroupScope`: `"Global"`, `"DomainLocal"`または `"Universal"`
+
+       専用カラムの方が先に評価されます(それぞれ別に)。専用カラムは存在しながら、値が空文字や不正な値だった場合には、当該グループのインポート自体がスキップされます。
+       - `groupType`の値には安易に触らない方が無難です。専用カラムの方を調整するほうが安全です。
+
+       詳しくは、当レポジトリの [README](../README.md) や `import-ADData.ps1` のヘルプを参照してください。
   
    - ユーザーデータ：  
+
      `MemberOf,Manager,CannotChangePassword,CanonicalName,City,CN,codePage,Company,Country,countryCode,Department,Description,DisplayName,DistinguishedName,Division,EmailAddress,EmployeeID,EmployeeNumber,Enabled,Fax,GivenName,HomeDirectory,HomeDrive,HomePage,HomePhone,Initials,isCriticalSystemObject,MobilePhone,Name,ObjectCategory,ObjectClass,Office,OfficePhone,Organization,OtherName,PasswordNeverExpires,POBox,PostalCode,PrimaryGroup,ProfilePath,SamAccountName,sAMAccountType,ScriptPath,State,StreetAddress,Surname,Title,userAccountControl,UserPrincipalName`  
 
      📝 **注:**
