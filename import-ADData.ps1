@@ -1504,6 +1504,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     Write-Log $msg
 
                     # --- Finally create the group with the prepared properties ---
+                    Try {
                         if ($ouPath -match '^CN=Users,DC=') {
                             New-ADGroup @newGroupParams -ErrorAction Stop
                             Write-Log "New-ADGroup `@newGroupParams"
