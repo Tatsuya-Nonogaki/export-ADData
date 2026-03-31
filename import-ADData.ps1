@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.6
+  Version: 1.0.7
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -97,16 +97,23 @@
  .PARAMETER Group
   (Alias -g) Operates in group import mode. Can be omitted if -GroupFile is specified.
 
-  Note: GroupCategory and GroupScope handling in Group Imports
-  These properties are normally sourced from the "groupType" column. However, recalculating 
-  the hexadecimal integer for "groupType" can be cumbersome when modifications are required.
-  To simplify this process, you may leave "groupType" blank or prefix its value with a 
-  hash ("#"). In these cases, the script will use the string columns "GroupCategory" and 
-  "GroupScope" instead.
-
  .PARAMETER GroupFile
   (Alias -gf) Path to group CSV file. If omitted with -Group, a file selection 
   dialog prompts you.
+
+  Note: GroupCategory and GroupScope handling in Group Imports
+  GroupCategory and GroupScope are normally determined from the "groupType" column exported
+  from the source AD.
+  If you need to override these properties without recalculating "groupType", you can use
+  the dedicated string columns "GroupCategory" and "GroupScope" instead.
+    - GroupCategory: "Security" or "Distribution"
+    - GroupScope   : "Global", "DomainLocal", or "Universal"
+
+  Dedicated columns are evaluated first (per-property). If a dedicated column is missing or
+  blank, the script falls back to the "groupType" bits for that property.
+  If a dedicated column contains a non-blank invalid value (or if "groupType" is blank/invalid
+  and the dedicated columns do not fully specify both properties), the script skips creating
+  that group.
 
  .PARAMETER Computer
   (Alias -c) Operates in computer import mode. Can be omitted if -ComputerFile is specified.
@@ -1029,8 +1036,26 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         }
                     }
 
-                    # Set "userAccountControl" property related special control bits - Enabling account and set ChangePasswordAtLogon=True require a successfully set password
-                    $userFlags = [int]$usr.userAccountControl
+                    # --- Set "userAccountControl" property related special control bits - Enabling account and set ChangePasswordAtLogon=True require a successfully set password ---
+                    # Currently, we do not skip the user creation even if "userAccountControl" is incomplete.
+
+                    $userFlagsRaw = $usr.userAccountControl
+                    $userFlagsStr = if ($null -eq $userFlagsRaw) { "" } else { $userFlagsRaw.ToString().Trim() }
+
+                    $userFlags = 0
+                    if ($userFlagsStr -eq "") {
+                        $warn = "Warning: userAccountControl is blank for user '$sAMAccountName'. Treating as 0 (no flags)"
+                        Write-Host $warn -ForegroundColor Yellow
+                        Write-Log  $warn
+                    } else {
+                        $parsed = [int]::TryParse($userFlagsStr, [ref]$userFlags)
+                        if (-not $parsed) {
+                            $warn = "Warning: userAccountControl is not a valid integer for user '$sAMAccountName' (value='$userFlagsStr'). Treating as 0 (no flags)"
+                            Write-Host $warn -ForegroundColor Yellow
+                            Write-Log  $warn
+                            $userFlags = 0
+                        }
+                    }
 
                     # ----------------------------------------------------------------
                     # CCP/CPL/PNE normalization block (policy order: CCP > CPL > PNE)
@@ -1341,35 +1366,144 @@ Review your CSV. To override this check, use -NoClassCheck.)
                         GroupScope     = "Global"        # modified later if necessary
                     }
 
-                    # Set GroupCategory and GroupScope based on the groupType column.
-                    # If groupType is blank, contains only spaces, or is prefixed with '#', use the GroupCategory and GroupScope string columns instead.
-                    if (
-                        -not $grp.groupType -or
-                        ($grp.groupType -is [string] -and ($grp.groupType.Trim() -eq "" -or $grp.groupType.StartsWith('#')))
-                    ) {
-                        # Use the values from the string columns directly
-                        foreach ($col in @("GroupCategory", "GroupScope")) {
-                            if ($grp.$col -and $grp.$col.Trim() -ne "") {
-                                $newGroupParams.$col = $grp.$col
-                            } else {
-                                Write-Host "Warning: '$col' column for group ${sAMAccountName} does not have a valid value" -ForegroundColor Yellow
-                                Write-Log "Warning: '$col' column for group ${sAMAccountName} does not have a valid value; The property may be set to unintended value"
+                    # Determine GroupCategory/GroupScope with "dedicated columns first" policy:
+                    # - If dedicated columns contain valid values, they take precedence (per-property).
+                    # - If dedicated column is blank (or missing), fall back to groupType.
+                    # - If a dedicated column is present but contains a non-blank invalid value, SKIP this group (continue).
+                    # - If groupType is missing/invalid and dedicated columns cannot fully determine the result, SKIP this group.
+
+                    $groupCategoryFinal  = $null
+                    $groupScopeFinal     = $null
+                    $groupCategorySource = "none"   # "column" | "groupType" | "none"
+                    $groupScopeSource    = "none"   # "column" | "groupType" | "none"
+
+                    $categoryColExists = $grp.PSObject.Properties.Name -contains "GroupCategory"
+                    $scopeColExists    = $grp.PSObject.Properties.Name -contains "GroupScope"
+
+                    $catInvalidNonBlank = $false
+                    $scInvalidNonBlank  = $false
+
+                    # --- 1) Dedicated columns (preferred) ---
+                    if ($categoryColExists) {
+                        $catRaw = $grp.GroupCategory
+                        $catStr = if ($null -eq $catRaw) { "" } else { $catRaw.ToString().Trim() }
+
+                        if ($catStr -ne "") {
+                            if ($catStr -match '^(?i)security$') {
+                                $groupCategoryFinal = "Security"
+                                $groupCategorySource = "column"
+                            }
+                            elseif ($catStr -match '^(?i)distribution$') {
+                                $groupCategoryFinal = "Distribution"
+                                $groupCategorySource = "column"
+                            }
+                            else {
+                                $catInvalidNonBlank = $true
+                                $msg = "Failed to create group '$sAMAccountName': GroupCategory (column) has invalid value '$catStr'. Expected: Security or Distribution."
+                                Write-Host $msg -ForegroundColor Red
+                                Write-Log  $msg
                             }
                         }
-                    } else {
-                        # Determine based on groupType integers
-                        if ($grp.groupType -band 0x80000000) {
-                            $newGroupParams.GroupCategory = "Security"
-                        } else {
-                            $newGroupParams.GroupCategory = "Distribution"
-                        }
- 
-                        if ($grp.groupType -band 0x2)     { $newGroupParams.GroupScope = "Global" }
-                        elseif ($grp.groupType -band 0x4) { $newGroupParams.GroupScope = "DomainLocal" }
-                        elseif ($grp.groupType -band 0x8) { $newGroupParams.GroupScope = "Universal" }
                     }
 
-                    Try {
+                    if ($scopeColExists) {
+                        $scRaw = $grp.GroupScope
+                        $scStr = if ($null -eq $scRaw) { "" } else { $scRaw.ToString().Trim() }
+
+                        if ($scStr -ne "") {
+                            if ($scStr -match '^(?i)global$') {
+                                $groupScopeFinal = "Global"
+                                $groupScopeSource = "column"
+                            }
+                            elseif ($scStr -match '^(?i)domainlocal$') {
+                                $groupScopeFinal = "DomainLocal"
+                                $groupScopeSource = "column"
+                            }
+                            elseif ($scStr -match '^(?i)universal$') {
+                                $groupScopeFinal = "Universal"
+                                $groupScopeSource = "column"
+                            }
+                            else {
+                                $scInvalidNonBlank = $true
+                                $msg = "Failed to create group '$sAMAccountName': GroupScope (column) has invalid value '$scStr'. Expected: Global, DomainLocal, or Universal."
+                                Write-Host $msg -ForegroundColor Red
+                                Write-Log  $msg
+                            }
+                        }
+                    }
+
+                    # If user attempted to specify dedicated values but they are invalid: skip this group.
+                    if ($catInvalidNonBlank -or $scInvalidNonBlank) {
+                        continue
+                    }
+
+                    # --- 2) Fallback to groupType bits (only for properties still unknown) ---
+                    $needCategoryFromGroupType = (-not $groupCategoryFinal)
+                    $needScopeFromGroupType    = (-not $groupScopeFinal)
+
+                    if ($needCategoryFromGroupType -or $needScopeFromGroupType) {
+                        # Build a list of missing properties for diagnostics
+                        $missingFromDedicated = @()
+                        if ($needCategoryFromGroupType) { $missingFromDedicated += "GroupCategory" }
+                        if ($needScopeFromGroupType)    { $missingFromDedicated += "GroupScope" }
+                        $missingStr = ($missingFromDedicated -join ",")
+
+                        $groupTypeRaw = $grp.groupType
+                        $groupTypeInt = 0
+
+                        $gtStr = if ($null -eq $groupTypeRaw) { "" } else { $groupTypeRaw.ToString().Trim() }
+                        if ($gtStr -ne "") {
+                            # Parse groupType in one call: .NET TryParse writes the parsed int into $groupTypeInt (via [ref]) and returns $true/$false (no exceptions thrown).
+                            $parsed = [int]::TryParse($gtStr, [ref]$groupTypeInt)
+                            if (-not $parsed) {
+                                $msg = "Failed to create group '$sAMAccountName': Dedicated columns were not fully specified ($missingStr) and groupType is not a valid integer (groupType='$gtStr')"
+                                Write-Host $msg -ForegroundColor Red
+                                Write-Log  $msg
+                                continue
+                            }
+                        } else {
+                            $msg = "Failed to create group '$sAMAccountName': Dedicated columns were not fully specified ($missingStr) and groupType is blank."
+                            Write-Host $msg -ForegroundColor Red
+                            Write-Log  $msg
+                            continue
+                        }
+
+                        if ($needCategoryFromGroupType) {
+                            if ($groupTypeInt -band 0x80000000) { $groupCategoryFinal = "Security" }
+                            else                                { $groupCategoryFinal = "Distribution" }
+                            $groupCategorySource = "groupType"
+                        }
+
+                        if ($needScopeFromGroupType) {
+                            if     ($groupTypeInt -band 0x2) { $groupScopeFinal = "Global" }
+                            elseif ($groupTypeInt -band 0x4) { $groupScopeFinal = "DomainLocal" }
+                            elseif ($groupTypeInt -band 0x8) { $groupScopeFinal = "Universal" }
+                            else {
+                                $msg = "Failed to create group '$sAMAccountName': groupType does not contain a valid scope bit (0x2/0x4/0x8) (groupType=$groupTypeInt)"
+                                Write-Host $msg -ForegroundColor Red
+                                Write-Log  $msg
+                                continue
+                            }
+                            $groupScopeSource = "groupType"
+                        }
+                    }
+
+                    # --- 3) Final sanity: must have both category and scope ---
+                    if (-not $groupCategoryFinal -or -not $groupScopeFinal) {
+                        $msg = "Failed to create group '$sAMAccountName': could not determine GroupCategory/GroupScope. GroupCategory=$groupCategoryFinal ($groupCategorySource) GroupScope=$groupScopeFinal ($groupScopeSource)"
+                        Write-Host $msg -ForegroundColor Red
+                        Write-Log  $msg
+                        continue
+                    }
+
+                    $newGroupParams.GroupCategory = $groupCategoryFinal
+                    $newGroupParams.GroupScope    = $groupScopeFinal
+
+                    $msg = "GroupType evaluation: sAMAccountName=$sAMAccountName GroupCategory=$groupCategoryFinal ($groupCategorySource) GroupScope=$groupScopeFinal ($groupScopeSource)"
+                    Write-Verbose $msg
+                    Write-Log $msg
+
+                    # --- Finally create the group with the prepared properties ---
                         if ($ouPath -match '^CN=Users,DC=') {
                             New-ADGroup @newGroupParams -ErrorAction Stop
                             Write-Log "New-ADGroup `@newGroupParams"
