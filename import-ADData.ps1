@@ -11,7 +11,7 @@
   "default" container defined in AD ('CN=Users', 'CN=Computers'), directly under the 
   domain root, or for importing objects as-is.
   
-  Version: 1.0.7
+  Version: 1.0.8
 
  .PARAMETER DNPath
   (Alias -p) Mandatory. Mutually exclusive with -DNPrefix and -DCDepth.
@@ -418,12 +418,12 @@ begin {
             }
 
             if ($invalid.Count -gt 0) {
-                $msg = "Error: -TrimOU may only contain valid OU names (no reserved words or empty values). Invalid entries: " + ($invalid -join ', ')
+                $msg = "Error: -TrimOU may only contain valid OU names (no reserved words or empty values). Invalid entries: `"$($invalid -join ', ')`""
                 Write-Host $msg -ForegroundColor Red
                 Write-Log $msg
                 throw $msg
             }
-          # Write-Log "debug :: Normalized TrimOU: $($TrimOUList -join ',')"
+            Write-Verbose "Normalized TrimOU: `"$($TrimOUList -join ',')`""
         }
     }
 
@@ -637,7 +637,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
         $ouPath = ConvertDNBase -oldDN $originalDN -newDNPath $DNPath -DefaultContainer $DefaultContainer
 
         if ($cnPart) {
-           # Write-Log "debug :: Get-NewDN : return ${cnPart},$ouPath"
+          # Write-Log "debug :: Get-NewDN : return '${cnPart},$ouPath'"
             return "${cnPart},$ouPath"
         } else {
             Write-Log "Warning: Get-NewDN : originalDN has no CN part"
@@ -666,7 +666,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
         # --- 2. Remove the deepest OUs from ouParts array according to '-TrimOU' argument ---
       # Write-Log "debug :: ConvertDNBase :: original oldDN: '$oldDN'"
-      # Write-Log "debug :: ConvertDNBase :: original ouParts: $($ouParts -join '|')"
+      # Write-Log "debug :: ConvertDNBase :: original ouParts: `"$($ouParts -join ',')`""
         if ($ouParts.Count -gt 0 -and $ouParts[0].Length -le 2) {
             Write-Log "Error: Detected malformed ouParts: $($ouParts -join '|')"
             throw "TrimOU error: ouParts appears malformed (likely split into characters). Check your CSV DN format and delimiter."
@@ -694,7 +694,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
                     }
                 }
             }
-            Write-Log "debug :: ConvertDNBase :: ouParts after TrimOU: $($ouParts -join ',')"
+            Write-Verbose "ConvertDNBase :: ouParts after TrimOU: `"$($ouParts -join ',')`""
         }
 
         # --- 3. Compose the new DN path ---
@@ -713,7 +713,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
 
                 foreach ($ou in $ouList) {
                     $ou = $ou.Trim()
-                  # Write-Log "debug :: processing ou: $ou"
+                  # Write-Log "debug :: processing ou: '$ou'"
                     $ouName = $ou -replace "^OU=", ""
                     # Check if OU exists, create if not
                     if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '${ou},$previousOUBase'" -ErrorAction SilentlyContinue)) {
@@ -1771,7 +1771,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
             }
 
             # Skip if the same DN is already set
-          # Write-Log "debug :: Fixup-GroupManagedBy : targetGroup.ManagedBy: $($targetGroup.ManagedBy)"
+          # Write-Log "debug :: Fixup-GroupManagedBy : targetGroup.ManagedBy: '$($targetGroup.ManagedBy)'"
             if ($targetGroup.ManagedBy -eq $newManagedBy) {
                 Write-Host "Group '$sAMAccountName': ManagedBy already set to correct DN, skipping"
                 Write-Log "Group '$sAMAccountName': ManagedBy already set to correct DN: '$newManagedBy', skipping"
@@ -1816,7 +1816,7 @@ Review your CSV. To override this check, use -NoClassCheck.)
     Write-Log "Target DN Path: $DNPath"
 
     if ($PSBoundParameters.ContainsKey('TrimOU') -and $TrimOUList.Count -gt 0) {
-        $trimMsg = "Option: 'TrimOU' specified: " + ($TrimOUList -join ', ')
+        $trimMsg = "Option: 'TrimOU' specified: `"$($TrimOUList -join ', ')`""
         Write-Host $trimMsg
         Write-Log $trimMsg
     }
@@ -1848,8 +1848,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
         # Warn if filename looks like other modes
         if (FileName-WrongType-Warn -FilePath $GroupFile -MyType "group") { exit 1 }
 
-        Write-Host "Group File Path: $GroupFile"
-        Write-Log "Group File Path: $GroupFile"
+        Write-Host "Group File Path: '$GroupFile'"
+        Write-Log "Group File Path: '$GroupFile'"
         Import-ADObject -filePath $GroupFile -objectClass "group"
     }
 
@@ -1867,8 +1867,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
         # Warn if filename looks like other modes
         if (FileName-WrongType-Warn -FilePath $UserFile -MyType "user") { exit 1 }
 
-        Write-Host "User File Path: $UserFile"
-        Write-Log "User File Path: $UserFile"
+        Write-Host "User File Path: '$UserFile'"
+        Write-Log "User File Path: '$UserFile'"
         Import-ADObject -filePath $UserFile -objectClass "user"
     }
 
@@ -1905,8 +1905,8 @@ Review your CSV. To override this check, use -NoClassCheck.)
         # Warn if filename looks like other modes
         if (FileName-WrongType-Warn -FilePath $GroupFile -MyType "group") { exit 1 }
 
-        Write-Host "Group File Path: $GroupFile"
-        Write-Log "Group File Path: $GroupFile"
+        Write-Host "Group File Path: '$GroupFile'"
+        Write-Log "Group File Path: '$GroupFile'"
         Fixup-GroupManagedBy -GroupFile $GroupFile -DNPath $DNPath
     }
 
